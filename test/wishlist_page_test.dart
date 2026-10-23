@@ -127,13 +127,19 @@ Future<void> _loadFonts() async {
     ..addFont(bytes('assets/fonts/Inter-Bold.ttf'))
     ..addFont(bytes('assets/fonts/Inter-ExtraBold.ttf'));
   final display = FontLoader('InterDisplay')..addFont(bytes('assets/fonts/InterDisplay-Bold.ttf'));
+  final icons = FontLoader('packages/phosphor_flutter/PhosphorRegular')
+    ..addFont(rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor.ttf'));
+  final iconsBold = FontLoader('packages/phosphor_flutter/PhosphorBold')
+    ..addFont(rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor-Bold.ttf'));
+  final iconsFill = FontLoader('packages/phosphor_flutter/PhosphorFill')
+    ..addFont(rootBundle.load('packages/phosphor_flutter/lib/fonts/Phosphor-Fill.ttf'));
   final bengali = FontLoader('NotoSansBengali')
     ..addFont(bytes('assets/fonts/NotoSansBengali-Regular.ttf'))
     ..addFont(bytes('assets/fonts/NotoSansBengali-Medium.ttf'))
     ..addFont(bytes('assets/fonts/NotoSansBengali-SemiBold.ttf'))
     ..addFont(bytes('assets/fonts/NotoSansBengali-Bold.ttf'))
     ..addFont(bytes('assets/fonts/NotoSansBengali-ExtraBold.ttf'));
-  await Future.wait([inter.load(), display.load(), bengali.load()]);
+  await Future.wait([inter.load(), display.load(), icons.load(), iconsBold.load(), iconsFill.load(), bengali.load()]);
 }
 
 void main() {
@@ -163,7 +169,9 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 800));
+    for (var i = 0; i < 16; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
 
     expect(find.text('My Wishlist'), findsOneWidget);
     expect(find.text('Save your favorite products and shop them later.'), findsOneWidget);
@@ -180,12 +188,22 @@ void main() {
     expect(find.text('View Details'), findsWidgets);
     expect(tester.takeException(), isNull);
 
-    final boundary = tester.renderObject<RenderRepaintBoundary>(find.byType(RepaintBoundary).first);
-    await tester.runAsync(() async {
-      final image = await boundary.toImage(pixelRatio: 2);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      File('/tmp/wishlist-page.png').writeAsBytesSync(bytes!.buffer.asUint8List());
-    });
+    await _capture(tester, '/tmp/wishlist-page.png');
+
+    await tester.tap(find.bySemanticsLabel('Remove Oraimo Necklace Lite (OEB-311) from wishlist'));
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text('Removed from wishlist'), findsOneWidget);
+    expect(find.text('Oraimo Necklace Lite (OEB-311)'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.tap(find.byType(SnackBarAction));
+    await tester.pump();
+    expect(find.text('Oraimo Necklace Lite (OEB-311)'), findsOneWidget);
 
     await tester.tap(find.text('Electronics (3)'));
     await tester.pump();
@@ -194,11 +212,26 @@ void main() {
     expect(find.text('Oraimo Necklace Lite (OEB-311)'), findsNothing);
     expect(tester.takeException(), isNull);
 
-    final filtered = tester.renderObject<RenderRepaintBoundary>(find.byType(RepaintBoundary).first);
-    await tester.runAsync(() async {
-      final filteredImage = await filtered.toImage(pixelRatio: 2);
-      final filteredBytes = await filteredImage.toByteData(format: ui.ImageByteFormat.png);
-      File('/tmp/wishlist-filtered.png').writeAsBytesSync(filteredBytes!.buffer.asUint8List());
-    });
+    await _capture(tester, '/tmp/wishlist-filtered.png');
+  });
+}
+
+Future<void> _capture(WidgetTester tester, String path) async {
+  final boundaries = tester.renderObjectList<RenderRepaintBoundary>(find.byType(RepaintBoundary));
+  RenderRepaintBoundary? largest;
+  var area = 0.0;
+  for (final boundary in boundaries) {
+    if (!boundary.hasSize || boundary.size.isEmpty || boundary.debugNeedsPaint) continue;
+    final next = boundary.size.width * boundary.size.height;
+    if (next > area) {
+      area = next;
+      largest = boundary;
+    }
+  }
+  final boundary = largest!;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 2);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    File(path).writeAsBytesSync(bytes!.buffer.asUint8List());
   });
 }

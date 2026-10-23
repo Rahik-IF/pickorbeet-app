@@ -121,6 +121,19 @@ class OrderCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                        if (order.courierLine != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            order.courierLine!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: tone.accent,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -645,7 +658,17 @@ class _Actions extends StatelessWidget {
             color: OrdersPalette.inkSoft,
             border: OrdersPalette.line,
             loading: cancelling,
+            compact: order.hasTracking,
             onTap: cancelling ? null : onCancel,
+          ),
+        if (order.hasTracking)
+          _ActionButton(
+            label: 'Track',
+            icon: PhosphorIconsFill.mapPin,
+            color: OrdersPalette.blue,
+            border: const Color(0xFFB9D4FF),
+            compact: true,
+            onTap: onTrack,
           ),
         _ActionButton(
           label: 'View Details',
@@ -653,6 +676,7 @@ class _Actions extends StatelessWidget {
           trailing: true,
           color: OrdersPalette.orangeDeep,
           border: const Color(0xFFFFC48A),
+          compact: order.hasTracking,
           onTap: onDetails,
         ),
       ],

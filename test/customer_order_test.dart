@@ -54,6 +54,25 @@ void main() {
     expect(order.scheduleLabel, 'Cancelled on');
   });
 
+  test('a booked order carries the Steadfast status and tracking code', () {
+    final order = CustomerOrder.fromMap({
+      'id': '3',
+      'order_number': 'PO783200',
+      'order_status': 'shipped',
+      'payment_status': 'pending',
+      'total': '1080.00',
+      'tracking_code': 'SF123456789BD',
+      'tracking_url': 'https://steadfast.com.bd/t/SF123456789BD',
+      'shipment_status': 'in_review',
+      'shipment_status_group': 'in_review',
+      'shipment_status_label': 'In review',
+    });
+
+    expect(order.hasTracking, isTrue);
+    expect(order.courierLine, 'In review · SF123456789BD');
+    expect(order.stage, OrderStage.shipped);
+  });
+
   test('filter query maps account shortcuts onto the chips', () {
     expect(OrderFilter.fromQuery(null), OrderFilter.all);
     expect(OrderFilter.fromQuery('open'), OrderFilter.processing);

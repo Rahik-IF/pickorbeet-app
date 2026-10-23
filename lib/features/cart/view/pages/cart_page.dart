@@ -29,6 +29,7 @@ import 'package:pickorbeet/features/cart/repositories/cart_remote_repository.dar
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/view/widgets/product_card.dart';
 import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
+import 'package:pickorbeet/features/checkout/checkout_args.dart';
 import 'package:pickorbeet/features/home/view/widgets/category_section_card.dart';
 
 /// The cart: selectable lines, a voucher, recommendations, and a total that counts as it changes.
@@ -73,13 +74,17 @@ class _CartPageState extends ConsumerState<CartPage> {
   Future<void> _refresh() => ref.read(cartNotifierProvider.notifier).reload();
 
   Future<void> _setQuantity(CartItemModel item, int quantity) async {
-    final failure = await ref.read(cartNotifierProvider.notifier).setQuantity(item.id, quantity);
+    final failure = await ref
+        .read(cartNotifierProvider.notifier)
+        .setQuantity(item.id, quantity);
     if (!mounted || failure == null) return;
     showToast(context, failure.message, kind: ToastKind.error);
   }
 
   Future<void> _remove(CartItemModel item) async {
-    final (_, failure) = await ref.read(cartNotifierProvider.notifier).remove(item.id);
+    final (_, failure) = await ref
+        .read(cartNotifierProvider.notifier)
+        .remove(item.id);
     if (!mounted) return;
     if (failure != null) {
       showToast(context, failure.message, kind: ToastKind.error);
@@ -95,7 +100,9 @@ class _CartPageState extends ConsumerState<CartPage> {
   }
 
   Future<void> _undo(CartItemModel item) async {
-    final failure = await ref.read(cartNotifierProvider.notifier).undoRemove(item);
+    final failure = await ref
+        .read(cartNotifierProvider.notifier)
+        .undoRemove(item);
     if (!mounted || failure == null) return;
     showToast(context, failure.message, kind: ToastKind.error);
   }
@@ -107,8 +114,14 @@ class _CartPageState extends ConsumerState<CartPage> {
         title: const Text('Clear cart?'),
         content: const Text('Every item in your cart will be removed.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep items')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear cart')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep items'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear cart'),
+          ),
         ],
       ),
     );
@@ -123,8 +136,11 @@ class _CartPageState extends ConsumerState<CartPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppPallete.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-      builder: (context) => _VoucherSheet(subtotal: subtotal, currentCode: _couponCode),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) =>
+          _VoucherSheet(subtotal: subtotal, currentCode: _couponCode),
     );
     if (result == null || !mounted) return;
     setState(() {
@@ -137,19 +153,18 @@ class _CartPageState extends ConsumerState<CartPage> {
   void _reprice(String code, String subtotal) {
     _pricedFor = subtotal;
     unawaited(() async {
-      final result = await ref.read(cartRemoteRepositoryProvider).validateCoupon(code: code, subtotal: subtotal);
+      final result = await ref
+          .read(cartRemoteRepositoryProvider)
+          .validateCoupon(code: code, subtotal: subtotal);
       if (!mounted || _couponCode != code) return;
-      result.fold(
-        (failure) {
-          setState(() {
-            _couponCode = null;
-            _discount = '0';
-            _pricedFor = null;
-          });
-          showToast(context, failure.message, kind: ToastKind.error);
-        },
-        (quote) => setState(() => _discount = quote.discountAmount),
-      );
+      result.fold((failure) {
+        setState(() {
+          _couponCode = null;
+          _discount = '0';
+          _pricedFor = null;
+        });
+        showToast(context, failure.message, kind: ToastKind.error);
+      }, (quote) => setState(() => _discount = quote.discountAmount));
     }());
   }
 
@@ -165,8 +180,11 @@ class _CartPageState extends ConsumerState<CartPage> {
           const TabHeader(),
           Expanded(
             child: cart.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: AppPallete.primary)),
-              error: (error, _) => ErrorState(failure: error, onRetry: _refresh),
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: AppPallete.primary),
+              ),
+              error: (error, _) =>
+                  ErrorState(failure: error, onRetry: _refresh),
               data: _body,
             ),
           ),
@@ -199,19 +217,29 @@ class _CartPageState extends ConsumerState<CartPage> {
       );
     }
 
-    final selected = [for (final item in cart.items) if (_selected.contains(item.id)) item];
+    final selected = [
+      for (final item in cart.items)
+        if (_selected.contains(item.id)) item,
+    ];
     final units = selected.fold<int>(0, (sum, item) => sum + item.quantity);
-    final itemsTotal = selected.fold(Decimal.zero, (sum, item) => sum + Formatters.decimal(item.totalPrice));
+    final itemsTotal = selected.fold(
+      Decimal.zero,
+      (sum, item) => sum + Formatters.decimal(item.totalPrice),
+    );
     var discount = Formatters.decimal(_discount);
     if (discount < Decimal.zero) discount = Decimal.zero;
     if (discount > itemsTotal) discount = itemsTotal;
-    final delivery = selected.isEmpty ? Decimal.zero : Formatters.decimal(cart.deliveryInsideDhaka);
+    final delivery = selected.isEmpty
+        ? Decimal.zero
+        : Formatters.decimal(cart.deliveryInsideDhaka);
     final total = itemsTotal - discount + delivery;
     final subtotalText = itemsTotal.toString();
     final code = _couponCode;
     if (code != null && _pricedFor != subtotalText) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _couponCode == code && _pricedFor != subtotalText) _reprice(code, subtotalText);
+        if (mounted && _couponCode == code && _pricedFor != subtotalText) {
+          _reprice(code, subtotalText);
+        }
       });
     }
 
@@ -221,8 +249,15 @@ class _CartPageState extends ConsumerState<CartPage> {
       backgroundColor: AppPallete.surface,
       child: ListView(
         controller: _scroll,
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(CartPage.margin, 14, CartPage.margin, 20),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          CartPage.margin,
+          14,
+          CartPage.margin,
+          20,
+        ),
         children: [
           _CartTitle(count: cart.totalItems, onClear: _clear).entrance(),
           const SizedBox(height: 12),
@@ -234,12 +269,15 @@ class _CartPageState extends ConsumerState<CartPage> {
                 final id = cart.items[i].id;
                 if (!_selected.add(id)) _selected.remove(id);
               }),
-              onQuantity: (quantity) => unawaited(_setQuantity(cart.items[i], quantity)),
+              onQuantity: (quantity) =>
+                  unawaited(_setQuantity(cart.items[i], quantity)),
               onRemove: () => unawaited(_remove(cart.items[i])),
             ).entrance(index: i, enabled: i < 4),
             const SizedBox(height: 10),
           ],
-          _Suggestions(excluded: cart.items.map((item) => item.productId).toSet()),
+          _Suggestions(
+            excluded: cart.items.map((item) => item.productId).toSet(),
+          ),
           const SizedBox(height: 12),
           _Summary(
             units: units,
@@ -252,7 +290,12 @@ class _CartPageState extends ConsumerState<CartPage> {
             total: total.toString(),
             onDiscount: () => unawaited(_editVoucher(subtotalText)),
             canCheckout: selected.isNotEmpty,
-            onCheckout: () => context.push(Routes.checkout, extra: selected.map((item) => item.id).toList()),
+            onCheckout: () => context.push(
+              CheckoutArgs(
+                itemIds: [for (final item in selected) item.id],
+                couponCode: _couponCode,
+              ).location,
+            ),
           ).entrance(index: 4),
         ],
       ),
@@ -271,9 +314,21 @@ class _CartTitle extends StatelessWidget {
     final label = count == 1 ? 'item' : 'items';
     return Row(
       children: [
-        Text('My Cart', style: AppTypography.titleLarge.copyWith(fontSize: 18.5, fontWeight: FontWeight.w800)),
+        Text(
+          'My Cart',
+          style: AppTypography.titleLarge.copyWith(
+            fontSize: 18.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         const SizedBox(width: 6),
-        Text('($count $label)', style: AppTypography.bodyLarge.copyWith(color: AppPallete.textSecondary, fontSize: 12)),
+        Text(
+          '($count $label)',
+          style: AppTypography.bodyLarge.copyWith(
+            color: AppPallete.textSecondary,
+            fontSize: 12,
+          ),
+        ),
         const Spacer(),
         Pressable(
           semanticLabel: 'Clear cart',
@@ -281,11 +336,19 @@ class _CartTitle extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(PhosphorIconsRegular.trash, size: 14, color: AppPallete.sale),
+              const Icon(
+                PhosphorIconsRegular.trash,
+                size: 14,
+                color: AppPallete.sale,
+              ),
               const SizedBox(width: 4),
               Text(
                 'Clear Cart',
-                style: AppTypography.label.copyWith(color: AppPallete.sale, fontWeight: FontWeight.w600, fontSize: 11),
+                style: AppTypography.label.copyWith(
+                  color: AppPallete.sale,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
@@ -313,7 +376,9 @@ class _CartLine extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final saved = ref.watch(isWishlistedProvider(item.productId));
-    final subtitle = item.shortDescription.trim().isNotEmpty ? item.shortDescription.trim() : item.variantLabel;
+    final subtitle = item.shortDescription.trim().isNotEmpty
+        ? item.shortDescription.trim()
+        : item.variantLabel;
     return Dismissible(
       key: ValueKey(item.id),
       direction: DismissDirection.endToStart,
@@ -322,8 +387,15 @@ class _CartLine extends ConsumerWidget {
       secondaryBackground: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 18),
-        decoration: BoxDecoration(color: AppPallete.danger, borderRadius: BorderRadius.circular(12)),
-        child: const Icon(PhosphorIconsBold.trash, color: AppPallete.onDark, size: 18),
+        decoration: BoxDecoration(
+          color: AppPallete.danger,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(
+          PhosphorIconsBold.trash,
+          color: AppPallete.onDark,
+          size: 18,
+        ),
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -336,7 +408,10 @@ class _CartLine extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(padding: const EdgeInsets.only(top: 18), child: _CheckBox(checked: selected, onTap: onSelected)),
+              Padding(
+                padding: const EdgeInsets.only(top: 18),
+                child: _CheckBox(checked: selected, onTap: onSelected),
+              ),
               const SizedBox(width: 8),
               Pressable(
                 semanticLabel: item.productName,
@@ -352,7 +427,11 @@ class _CartLine extends ConsumerWidget {
                         background: const Color(0xFFF4F7FC),
                       ),
                       if (item.hasDiscount)
-                        Positioned(left: 4, top: 4, child: _OffBadge(percent: item.discountPercentage)),
+                        Positioned(
+                          left: 4,
+                          top: 4,
+                          child: _OffBadge(percent: item.discountPercentage),
+                        ),
                     ],
                   ),
                 ),
@@ -367,27 +446,43 @@ class _CartLine extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: Pressable(
-                            onTap: () => context.push(Routes.product(item.productSlug)),
+                            onTap: () =>
+                                context.push(Routes.product(item.productSlug)),
                             child: Text(
                               item.productName,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.titleSmall.copyWith(fontSize: 12.4, height: 1.2),
+                              style: AppTypography.titleSmall.copyWith(
+                                fontSize: 12.4,
+                                height: 1.2,
+                              ),
                             ),
                           ),
                         ),
                         Pressable(
-                          semanticLabel: saved ? 'Remove from wishlist' : 'Save to wishlist',
+                          semanticLabel: saved
+                              ? 'Remove from wishlist'
+                              : 'Save to wishlist',
                           onTap: () {
-                            final added = ref.read(wishlistNotifierProvider.notifier).toggle(item.productId);
+                            final added = ref
+                                .read(wishlistNotifierProvider.notifier)
+                                .toggle(item.productId);
                             if (added == null && context.mounted) {
-                              showToast(context, 'Your wishlist is full.', kind: ToastKind.error);
+                              showToast(
+                                context,
+                                'Your wishlist is full.',
+                                kind: ToastKind.error,
+                              );
                             }
                           },
                           child: Icon(
-                            saved ? PhosphorIconsFill.heart : PhosphorIconsRegular.heart,
+                            saved
+                                ? PhosphorIconsFill.heart
+                                : PhosphorIconsRegular.heart,
                             size: 18,
-                            color: saved ? AppPallete.sale : AppPallete.heartIdle,
+                            color: saved
+                                ? AppPallete.sale
+                                : AppPallete.heartIdle,
                           ),
                         ),
                       ],
@@ -400,7 +495,13 @@ class _CartLine extends ConsumerWidget {
                         style: AppTypography.bodySmall.copyWith(fontSize: 10),
                       ),
                     if (item.isOutOfStock)
-                      Text('Out of stock', style: AppTypography.bodySmall.copyWith(color: AppPallete.danger, fontSize: 10)),
+                      Text(
+                        'Out of stock',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppPallete.danger,
+                          fontSize: 10,
+                        ),
+                      ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -408,8 +509,14 @@ class _CartLine extends ConsumerWidget {
                           child: PriceText(
                             price: item.unitPrice,
                             comparePrice: item.comparePrice,
-                            style: AppTypography.price.copyWith(fontSize: 14, fontWeight: FontWeight.w800, color: AppPallete.ink),
-                            strikeStyle: AppTypography.strike.copyWith(fontSize: 10),
+                            style: AppTypography.price.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppPallete.ink,
+                            ),
+                            strikeStyle: AppTypography.strike.copyWith(
+                              fontSize: 10,
+                            ),
                           ),
                         ),
                         QuantityStepper(
@@ -450,9 +557,18 @@ class _CheckBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: checked ? AppPallete.primary : AppPallete.surface,
           borderRadius: BorderRadius.circular(5),
-          border: Border.all(color: checked ? AppPallete.primary : const Color(0xFFD5DCEC), width: 1.4),
+          border: Border.all(
+            color: checked ? AppPallete.primary : const Color(0xFFD5DCEC),
+            width: 1.4,
+          ),
         ),
-        child: checked ? const Icon(PhosphorIconsBold.check, size: 11, color: AppPallete.onDark) : null,
+        child: checked
+            ? const Icon(
+                PhosphorIconsBold.check,
+                size: 11,
+                color: AppPallete.onDark,
+              )
+            : null,
       ),
     );
   }
@@ -467,11 +583,18 @@ class _OffBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(color: AppPallete.sale, borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(
+        color: AppPallete.sale,
+        borderRadius: BorderRadius.circular(4),
+      ),
       child: Text(
         '$percent% OFF',
         textScaler: TextScaler.noScaling,
-        style: AppTypography.labelSmall.copyWith(color: AppPallete.onDark, fontSize: 8, fontWeight: FontWeight.w700),
+        style: AppTypography.labelSmall.copyWith(
+          color: AppPallete.onDark,
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -482,22 +605,39 @@ class _Suggestions extends ConsumerWidget {
 
   final Set<String> excluded;
 
-  static List<ProductSummary> _pick(AsyncValue<Paginated<ProductSummary>> list, Set<String> excluded) {
+  static List<ProductSummary> _pick(
+    AsyncValue<Paginated<ProductSummary>> list,
+    Set<String> excluded,
+  ) {
     final results = list.valueOrNull?.results;
     if (results == null) return const [];
-    return [for (final product in results) if (!excluded.contains(product.id) && !product.isOutOfStock) product].take(8).toList();
+    return [
+      for (final product in results)
+        if (!excluded.contains(product.id) && !product.isOutOfStock) product,
+    ].take(8).toList();
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Featured products first. When those are already in the cart, fall back to the rest of the shop.
-    final featured = _pick(ref.watch(productListProvider(const ProductQuery(featured: true))), excluded);
+    final featured = _pick(
+      ref.watch(productListProvider(const ProductQuery(featured: true))),
+      excluded,
+    );
     final products = featured.length >= 2
         ? featured
-        : _pick(ref.watch(productListProvider(const ProductQuery(ordering: '-created_at'))), excluded);
+        : _pick(
+            ref.watch(
+              productListProvider(const ProductQuery(ordering: '-created_at')),
+            ),
+            excluded,
+          );
     if (products.isEmpty) return const SizedBox.shrink();
     const width = 92.9;
-    final height = ProductCard.heightFor(width, MediaQuery.textScalerOf(context));
+    final height = ProductCard.heightFor(
+      width,
+      MediaQuery.textScalerOf(context),
+    );
     return HomeCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -506,7 +646,9 @@ class _Suggestions extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 0),
             child: SectionHeader(
               title: 'You May Also Like',
-              onViewAll: () => context.push(Routes.productList(title: 'You May Also Like', featured: true)),
+              onViewAll: () => context.push(
+                Routes.productList(title: 'You May Also Like', featured: true),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -517,7 +659,11 @@ class _Suggestions extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10),
               itemCount: products.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) => ProductCard(product: products[index], width: width, heroScope: 'cart'),
+              itemBuilder: (context, index) => ProductCard(
+                product: products[index],
+                width: width,
+                heroScope: 'cart',
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -556,8 +702,14 @@ class _Summary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = AppTypography.bodyMedium.copyWith(fontSize: 12, color: AppPallete.inkSoft);
-    final amount = AppTypography.titleSmall.copyWith(fontSize: 12.5, fontWeight: FontWeight.w700);
+    final label = AppTypography.bodyMedium.copyWith(
+      fontSize: 12,
+      color: AppPallete.inkSoft,
+    );
+    final amount = AppTypography.titleSmall.copyWith(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w700,
+    );
     final hasDiscount = Formatters.decimal(discount) > Decimal.zero;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -574,23 +726,41 @@ class _Summary extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(PhosphorIconsRegular.receipt, size: 16, color: AppPallete.ink),
+                    const Icon(
+                      PhosphorIconsRegular.receipt,
+                      size: 16,
+                      color: AppPallete.ink,
+                    ),
                     const SizedBox(width: 6),
-                    Text('Order Summary', style: AppTypography.titleSmall.copyWith(fontSize: 13.5)),
+                    Text(
+                      'Order Summary',
+                      style: AppTypography.titleSmall.copyWith(fontSize: 13.5),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                _MoneyRow(label: 'Items ($units)', value: itemsTotal, labelStyle: label, valueStyle: amount),
+                _MoneyRow(
+                  label: 'Items ($units)',
+                  value: itemsTotal,
+                  labelStyle: label,
+                  valueStyle: amount,
+                ),
                 const SizedBox(height: 8),
                 Pressable(
-                  semanticLabel: couponCode == null ? 'Add a voucher' : 'Voucher $couponCode',
+                  semanticLabel: couponCode == null
+                      ? 'Add a voucher'
+                      : 'Voucher $couponCode',
                   onTap: onDiscount,
                   child: _MoneyRow(
-                    label: couponCode == null ? 'Discount' : 'Discount · $couponCode',
+                    label: couponCode == null
+                        ? 'Discount'
+                        : 'Discount · $couponCode',
                     value: discount,
                     deduction: hasDiscount,
                     labelStyle: label.copyWith(color: AppPallete.primaryText),
-                    valueStyle: amount.copyWith(color: hasDiscount ? AppPallete.success : AppPallete.ink),
+                    valueStyle: amount.copyWith(
+                      color: hasDiscount ? AppPallete.success : AppPallete.ink,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -602,7 +772,11 @@ class _Summary extends StatelessWidget {
                       message:
                           '${Formatters.money(insideDhaka)} inside Dhaka, ${Formatters.money(outsideDhaka)} outside.',
                       triggerMode: TooltipTriggerMode.tap,
-                      child: const Icon(PhosphorIconsRegular.info, size: 14, color: AppPallete.textTertiary),
+                      child: const Icon(
+                        PhosphorIconsRegular.info,
+                        size: 14,
+                        color: AppPallete.textTertiary,
+                      ),
                     ),
                     const Spacer(),
                     Text(Formatters.money(delivery), style: amount),
@@ -614,9 +788,18 @@ class _Summary extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    Text('Total Amount', style: AppTypography.titleSmall.copyWith(fontSize: 13.5)),
+                    Text(
+                      'Total Amount',
+                      style: AppTypography.titleSmall.copyWith(fontSize: 13.5),
+                    ),
                     const Spacer(),
-                    AnimatedMoney(total, style: AppTypography.price.copyWith(fontSize: 16, color: AppPallete.primary)),
+                    AnimatedMoney(
+                      total,
+                      style: AppTypography.price.copyWith(
+                        fontSize: 16,
+                        color: AppPallete.primary,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -654,8 +837,18 @@ class _MoneyRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: labelStyle)),
-        Text(deduction ? Formatters.deduction(value) : Formatters.money(value), style: valueStyle),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: labelStyle,
+          ),
+        ),
+        Text(
+          deduction ? Formatters.deduction(value) : Formatters.money(value),
+          style: valueStyle,
+        ),
       ],
     );
   }
@@ -699,7 +892,9 @@ class _VoucherSheetState extends ConsumerState<_VoucherSheet> {
       _busy = true;
       _error = null;
     });
-    final result = await ref.read(cartRemoteRepositoryProvider).validateCoupon(code: code, subtotal: widget.subtotal);
+    final result = await ref
+        .read(cartRemoteRepositoryProvider)
+        .validateCoupon(code: code, subtotal: widget.subtotal);
     if (!mounted) return;
     result.fold(
       (failure) => setState(() {
@@ -723,7 +918,10 @@ class _VoucherSheetState extends ConsumerState<_VoucherSheet> {
             child: Container(
               width: 36,
               height: 4,
-              decoration: BoxDecoration(color: AppPallete.divider, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                color: AppPallete.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -743,18 +941,28 @@ class _VoucherSheetState extends ConsumerState<_VoucherSheet> {
               errorText: _error,
               filled: true,
               fillColor: AppPallete.surfaceMuted,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
             onSubmitted: (_) => unawaited(_apply()),
           ),
           const SizedBox(height: 12),
-          AppButton(label: 'Apply', loading: _busy, onPressed: _busy ? null : () => unawaited(_apply())),
+          AppButton(
+            label: 'Apply',
+            loading: _busy,
+            onPressed: _busy ? null : () => unawaited(_apply()),
+          ),
           if (widget.currentCode != null) ...[
             const SizedBox(height: 8),
             AppButton(
               label: 'Remove voucher',
               variant: AppButtonVariant.ghost,
-              onPressed: _busy ? null : () => Navigator.pop(context, const _VoucherResult.cleared()),
+              onPressed: _busy
+                  ? null
+                  : () =>
+                        Navigator.pop(context, const _VoucherResult.cleared()),
             ),
           ],
         ],

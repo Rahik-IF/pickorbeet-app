@@ -483,9 +483,10 @@ class _Chips extends StatelessWidget {
       for (final name in ordered) (name, name, counts[name] ?? 0),
     ];
     return SizedBox(
-      height: 40,
+      height: 36,
       child: ListView.separated(
         primary: false,
+        clipBehavior: Clip.none,
         padding: const EdgeInsets.symmetric(vertical: 4),
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -517,13 +518,19 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? Colors.white : _chipInk;
+    final labelStyle = DefaultTextStyle.of(context).style.copyWith(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w600,
+      height: 1.1,
+      color: color,
+    );
     return Pressable(
       semanticLabel: selected ? '$label, $count, selected' : '$label, $count',
       onTap: onTap,
       child: AnimatedContainer(
         duration: Motion.of(context, Motion.short),
         curve: Motion.emphasizedDecelerate,
-        height: 32,
+        height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 13),
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -537,7 +544,7 @@ class _Chip extends StatelessWidget {
         child: AnimatedDefaultTextStyle(
           duration: Motion.of(context, Motion.short),
           curve: Motion.emphasizedDecelerate,
-          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.1, color: color),
+          style: labelStyle,
           child: Text('$label ($count)'),
         ),
       ),
@@ -591,11 +598,11 @@ class _WishlistSkeleton extends StatelessWidget {
           children: [
             const Row(
               children: [
-                SkeletonBox(width: 78, height: 32, radius: 999),
+                SkeletonBox(width: 78, height: 28, radius: 999),
                 SizedBox(width: 8),
-                SkeletonBox(width: 118, height: 32, radius: 999),
+                SkeletonBox(width: 118, height: 28, radius: 999),
                 SizedBox(width: 8),
-                SkeletonBox(width: 96, height: 32, radius: 999),
+                SkeletonBox(width: 96, height: 28, radius: 999),
               ],
             ),
             const SizedBox(height: 12),

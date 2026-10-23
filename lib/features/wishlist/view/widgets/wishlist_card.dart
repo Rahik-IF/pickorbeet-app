@@ -279,17 +279,17 @@ class _WishlistCardState extends ConsumerState<WishlistCard> with TickerProvider
               children: [
                 Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: _nameStyle),
                 if (meta.isNotEmpty) ...[
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: _metaStyle),
                 ],
                 if (rating != null) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   _Rating(label: rating),
                 ],
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 _Price(product: product),
                 if (save != null) ...[
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(save, maxLines: 1, overflow: TextOverflow.ellipsis, style: _saveStyle),
                 ],
               ],
@@ -330,7 +330,7 @@ class _WishlistCardState extends ConsumerState<WishlistCard> with TickerProvider
                 added: _added,
                 onTap: _played ? null : () => unawaited(_add()),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               _ActionButton(
                 label: 'View details for ${product.name}',
                 background: _viewFill,
@@ -556,7 +556,7 @@ class _ActionButton extends StatelessWidget {
       child: AnimatedContainer(
         duration: Motion.of(context, Motion.short),
         curve: Motion.emphasizedDecelerate,
-        height: 28,
+        height: 26,
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
@@ -614,7 +614,7 @@ class _RenderWishlistCardBody extends RenderBox
          RenderBoxContainerDefaultsMixin<RenderBox, _WishlistCardParentData> {
   static const _imageGap = 10.0;
   static const _actionGap = 8.0;
-  static const _toolbarGap = 12.0;
+  static const _toolbarGap = 8.0;
 
   @override
   void setupParentData(RenderBox child) {
@@ -630,20 +630,33 @@ class _RenderWishlistCardBody extends RenderBox
   }
 
   (double, double, double) _columns(double maxWidth) {
-    var image = (maxWidth * 0.30).clamp(0.0, 108.0);
-    var action = (maxWidth * 0.32).clamp(0.0, 118.0);
-    if (maxWidth >= 280) {
-      image = image.clamp(88.0, 108.0);
-      action = action.clamp(100.0, 118.0);
-    }
     const gaps = _imageGap + _actionGap;
-    final overflow = image + action + gaps - maxWidth;
-    if (overflow > 0) {
-      final spare = math.max(image + action, 1);
-      image = math.max(0, image - overflow * (image / spare));
-      action = math.max(0, maxWidth - gaps - image);
+    var image = (maxWidth * 0.27).clamp(0.0, 104.0);
+    var action = (maxWidth * 0.28).clamp(0.0, 108.0);
+    if (maxWidth >= 300) {
+      image = image.clamp(84.0, 104.0);
+      action = action.clamp(96.0, 108.0);
     }
-    return (image, action, math.max(0, maxWidth - image - action - gaps));
+    var details = maxWidth - image - action - gaps;
+    // The name and the review line need the middle. The photo and the buttons give up width first.
+    final minDetails = math.min(156.0, maxWidth * 0.42);
+    if (details < minDetails) {
+      var need = minDetails - details;
+      final fromAction = math.min(need, math.max(0.0, action - 92));
+      action -= fromAction;
+      need -= fromAction;
+      final fromImage = math.min(need, math.max(0.0, image - 72));
+      image -= fromImage;
+      details = maxWidth - image - action - gaps;
+    }
+    if (image + action + gaps > maxWidth) {
+      final room = math.max(0.0, maxWidth - gaps);
+      final spare = math.max(image + action, 1);
+      image = room * (image / spare);
+      action = math.max(0.0, room - image);
+      details = math.max(0.0, maxWidth - image - action - gaps);
+    }
+    return (image, action, math.max(0.0, details));
   }
 
   @override

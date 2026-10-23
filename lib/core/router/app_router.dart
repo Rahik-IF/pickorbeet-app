@@ -8,8 +8,10 @@ import 'package:pickorbeet/core/router/routes.dart';
 import 'package:pickorbeet/core/widgets/placeholder_page.dart';
 import 'package:pickorbeet/features/account/view/pages/account_page.dart';
 import 'package:pickorbeet/features/account/view/pages/addresses_page.dart';
+import 'package:pickorbeet/features/account/view/pages/order_detail_page.dart';
 import 'package:pickorbeet/features/account/view/pages/orders_page.dart';
 import 'package:pickorbeet/features/account/view/pages/settings_page.dart';
+import 'package:pickorbeet/features/account/view/pages/track_order_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/forgot_password_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/login_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/register_page.dart';
@@ -18,10 +20,14 @@ import 'package:pickorbeet/features/auth/view/pages/verify_email_page.dart';
 import 'package:pickorbeet/features/cart/view/pages/cart_page.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/view/pages/categories_page.dart';
+import 'package:pickorbeet/features/catalog/view/pages/product_detail_page.dart';
 import 'package:pickorbeet/features/catalog/view/pages/product_list_page.dart';
+import 'package:pickorbeet/features/checkout/checkout_args.dart';
+import 'package:pickorbeet/features/checkout/view/checkout_page.dart';
 import 'package:pickorbeet/features/home/view/pages/home_page.dart';
 import 'package:pickorbeet/features/notifications/view/notifications_page.dart';
 import 'package:pickorbeet/features/vouchers/view/vouchers_page.dart';
+import 'package:pickorbeet/features/wishlist/view/pages/wishlist_page.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'app_router.g.dart';
@@ -63,7 +69,7 @@ GoRouter appRouter(Ref ref) {
         branches: [
           _tab(Routes.home, (_) => const HomePage()),
           _tab(Routes.categories, (_) => const CategoriesPage()),
-          _tab(Routes.wishlist, (_) => const PlaceholderPage('Wishlist', tab: true)),
+          _tab(Routes.wishlist, (_) => const WishlistPage()),
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -103,11 +109,16 @@ GoRouter appRouter(Ref ref) {
       ),
       GoRoute(
         path: Routes.product(':slug'),
-        builder: (_, _) => const PlaceholderPage('Product'),
+        builder: (_, state) => ProductDetailPage(
+          slug: state.pathParameters['slug']!,
+          heroTag: _heroTag(state.extra),
+        ),
       ),
       GoRoute(
         path: Routes.checkout,
-        builder: (_, _) => const PlaceholderPage('Checkout'),
+        builder: (_, state) => CheckoutPage(
+          args: CheckoutArgs.fromUri(state.uri, extra: state.extra),
+        ),
       ),
       GoRoute(
         path: Routes.payment(':orderId'),
@@ -124,11 +135,13 @@ GoRouter appRouter(Ref ref) {
         routes: [
           GoRoute(
             path: ':id',
-            builder: (_, _) => const PlaceholderPage('Order'),
+            builder: (_, state) =>
+                OrderDetailPage(orderId: state.pathParameters['id']!),
             routes: [
               GoRoute(
                 path: 'details',
-                builder: (_, _) => const PlaceholderPage('Order details'),
+                builder: (_, state) =>
+                    OrderDetailPage(orderId: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -136,7 +149,13 @@ GoRouter appRouter(Ref ref) {
       ),
       GoRoute(
         path: Routes.trackOrder,
-        builder: (_, _) => const PlaceholderPage('Track Order'),
+        builder: (_, state) => TrackOrderPage(
+          initialQuery:
+              state.uri.queryParameters['order'] ??
+              state.uri.queryParameters['tracking'] ??
+              '',
+          orderId: state.uri.queryParameters['id'],
+        ),
       ),
       GoRoute(
         path: Routes.login,
@@ -217,6 +236,8 @@ StatefulShellBranch _tab(
 ) => StatefulShellBranch(
   routes: [GoRoute(path: path, builder: (context, state) => page(state))],
 );
+
+String? _heroTag(Object? extra) => extra is String ? extra : null;
 
 ProductListPage _productList(GoRouterState state) {
   final params = state.uri.queryParameters;

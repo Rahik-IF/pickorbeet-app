@@ -39,6 +39,19 @@ enum OrderFilter {
 /// How a card is drawn. Several API statuses share one visual treatment.
 enum OrderStage { processing, shipped, delivered, cancelled }
 
+/// Store-status label shared by the order list and the order screen.
+String orderStatusLabel(String status) => switch (status) {
+  'pending' => 'Pending',
+  'confirmed' => 'Confirmed',
+  'processing' => 'Processing',
+  'shipped' => 'Shipped',
+  'out_for_delivery' => 'Out for delivery',
+  'delivered' => 'Delivered',
+  'cancelled' => 'Cancelled',
+  'refunded' => 'Refunded',
+  _ => 'Update',
+};
+
 /// The first product on an order, which is all the card needs to show.
 @immutable
 class OrderPreview {
@@ -117,6 +130,9 @@ class CustomerOrder {
     this.updatedAt,
     this.trackingCode,
     this.trackingUrl,
+    this.shipmentStatus,
+    this.shipmentStatusGroup,
+    this.shipmentStatusLabel,
     this.preview,
   });
 
@@ -134,7 +150,21 @@ class CustomerOrder {
   final DateTime? updatedAt;
   final String? trackingCode;
   final String? trackingUrl;
+  final String? shipmentStatus;
+  final String? shipmentStatusGroup;
+  final String? shipmentStatusLabel;
   final OrderPreview? preview;
+
+  bool get hasTracking => (trackingCode ?? '').isNotEmpty || (trackingUrl ?? '').isNotEmpty;
+
+  /// `In review · SF123456789BD`, when Steadfast has the parcel.
+  String? get courierLine {
+    final label = shipmentStatusLabel;
+    final code = trackingCode;
+    if (label == null && code == null) return null;
+    if (label != null && code != null) return '$label · $code';
+    return label ?? code;
+  }
 
   OrderStage get stage => switch (status) {
     'shipped' || 'out_for_delivery' => OrderStage.shipped,
@@ -166,17 +196,7 @@ class CustomerOrder {
   String get placedLabel =>
       createdAt == null ? '' : 'Placed on ${Formatters.dateTime(createdAt)}';
 
-  String get badgeLabel => switch (status) {
-    'pending' => 'Pending',
-    'confirmed' => 'Confirmed',
-    'processing' => 'Processing',
-    'shipped' => 'Shipped',
-    'out_for_delivery' => 'Out for delivery',
-    'delivered' => 'Delivered',
-    'cancelled' => 'Cancelled',
-    'refunded' => 'Refunded',
-    _ => 'Update',
-  };
+  String get badgeLabel => orderStatusLabel(status);
 
   String get scheduleLabel => switch (stage) {
     OrderStage.processing => 'Arriving by',
@@ -241,6 +261,9 @@ class CustomerOrder {
       updatedAt: map.date('updated_at'),
       trackingCode: map.strOrNull('tracking_code'),
       trackingUrl: map.strOrNull('tracking_url'),
+      shipmentStatus: map.strOrNull('shipment_status'),
+      shipmentStatusGroup: map.strOrNull('shipment_status_group'),
+      shipmentStatusLabel: map.strOrNull('shipment_status_label'),
       preview: preview == null ? null : OrderPreview.fromMap(preview),
     );
   }

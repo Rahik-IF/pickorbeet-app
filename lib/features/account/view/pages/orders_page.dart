@@ -28,7 +28,6 @@ import 'package:pickorbeet/features/account/view/widgets/order_card.dart';
 import 'package:pickorbeet/features/account/viewmodel/orders_controller.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:skeletonizer/skeletonizer.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// My Orders: search, status chips, and a card for every stage in the design.
 class OrdersPage extends ConsumerStatefulWidget {
@@ -180,20 +179,12 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Future<void> _track(CustomerOrder order) async {
-    final raw = order.trackingUrl;
-    final uri = raw == null ? null : Uri.tryParse(raw);
-    if (uri != null && await canLaunchUrl(uri)) {
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (opened) return;
-    }
-    if (!mounted) return;
     final params = <String, String>{
       'order': order.orderNumber,
       if (order.trackingCode != null) 'tracking': order.trackingCode!,
+      'id': order.id,
     };
-    unawaited(
-      context.push(Uri(path: Routes.trackOrder, queryParameters: params).toString()),
-    );
+    unawaited(context.push(Uri(path: Routes.trackOrder, queryParameters: params).toString()));
   }
 
   Future<void> _buyAgain(CustomerOrder order) async {
