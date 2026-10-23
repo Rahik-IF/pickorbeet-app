@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The Flutter tool needs INTERNET to attach DevTools to a profile build. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Profile builds are pointed at the local Django server while measuring performance. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

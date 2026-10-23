@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The Flutter tool needs INTERNET for hot reload and breakpoints. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug builds talk to the local Django server over plain HTTP (10.0.2.2 or a LAN address).
+         Release builds keep Android's default of HTTPS only. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>
