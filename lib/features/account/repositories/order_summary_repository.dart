@@ -15,6 +15,8 @@ class OrderSummary {
     required this.delivered,
     required this.cancelled,
     required this.returned,
+    required this.total,
+    required this.counts,
   });
 
   /// Orders still on the way: pending through out for delivery.
@@ -22,13 +24,45 @@ class OrderSummary {
   final int delivered;
   final int cancelled;
   final int returned;
+  final int total;
+  final Map<String, int> counts;
+
+  int _status(String key) => counts[key] ?? 0;
+
+  /// Pending, confirmed, and processing. Matches the Processing chip on My Orders.
+  int get processingCount => counts.isEmpty
+      ? pending
+      : _status('pending') + _status('confirmed') + _status('processing');
+
+  int get shippedCount => _status('shipped') + _status('out_for_delivery');
 
   factory OrderSummary.fromMap(Json map) => OrderSummary(
-        pending: map.integer('open'),
-        delivered: map.integer('delivered'),
-        cancelled: map.integer('cancelled'),
-        returned: map.integer('returned'),
-      );
+    pending: map.integer('open'),
+    delivered: map.integer('delivered'),
+    cancelled: map.integer('cancelled'),
+    returned: map.integer('returned'),
+    total: map.integer('total'),
+    counts: _readCounts(map['counts']),
+  );
+}
+
+Map<String, int> _readCounts(Object? raw) {
+  if (raw is! Map) return const {};
+  final counts = <String, int>{};
+  for (final entry in raw.entries) {
+    final key = entry.key;
+    if (key is! String) continue;
+    final value = entry.value;
+    if (value is int) {
+      counts[key] = value;
+    } else if (value is num) {
+      counts[key] = value.toInt();
+    } else if (value is String) {
+      final parsed = int.tryParse(value);
+      if (parsed != null) counts[key] = parsed;
+    }
+  }
+  return Map.unmodifiable(counts);
 }
 
 class OrderSummaryRepository {
@@ -37,10 +71,10 @@ class OrderSummaryRepository {
   final ApiClient _api;
 
   Future<Either<AppFailure, OrderSummary>> fetch() => guardRequest(
-        () => _api.get('/orders/my-orders/summary/'),
-        (body) => OrderSummary.fromMap(asJson(body)),
-        success: const {200},
-      );
+    () => _api.get('/orders/my-orders/summary/'),
+    (body) => OrderSummary.fromMap(asJson(body)),
+    success: const {200},
+  );
 }
 
 final orderSummaryRepositoryProvider = Provider<OrderSummaryRepository>(

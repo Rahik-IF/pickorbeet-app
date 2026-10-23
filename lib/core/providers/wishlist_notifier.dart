@@ -34,6 +34,14 @@ class WishlistNotifier extends _$WishlistNotifier {
     _save([for (final id in state) if (id != productId) id]);
   }
 
+  /// Removes every id in [productIds] with one write. Unknown ids are ignored.
+  void removeMany(Iterable<String> productIds) {
+    final drop = productIds.toSet();
+    if (drop.isEmpty) return;
+    final next = [for (final id in state) if (!drop.contains(id)) id];
+    if (next.length != state.length) _save(next);
+  }
+
   /// Restores an item at its old position, for undo.
   void restore(String productId, int index) {
     if (state.contains(productId)) return;

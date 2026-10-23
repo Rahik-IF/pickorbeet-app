@@ -65,15 +65,17 @@ abstract final class Routes {
   static const privacy = '/account/privacy';
   static const help = '/help';
   static String helpFor(String orderNumber) => '/help?order=${Uri.encodeQueryComponent(orderNumber)}';
-  static const settings = '/settings';
+  static const settings = '/account/settings';
   static const notifications = '/notifications';
-  static const vouchers = '/vouchers';
+  static const vouchers = '/account/vouchers';
   static const paymentMethods = '/payment-methods';
   static const membership = '/membership';
 
   /// Locations that need a signed-in customer.
   static bool isProtected(String location) =>
-      location.startsWith(orders) || location.startsWith('$account/') || location == membership;
+      location == notifications ||
+      (location != vouchers &&
+          (location.startsWith(orders) || location.startsWith('$account/') || location == membership));
 
   /// Sign-in screens a signed-in customer has no reason to see.
   static bool isAuthScreen(String location) =>

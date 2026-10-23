@@ -8,6 +8,7 @@ import 'package:pickorbeet/core/providers/current_user_notifier.dart';
 import 'package:pickorbeet/features/auth/models/auth_session.dart';
 import 'package:pickorbeet/features/auth/repositories/auth_remote_repository.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
+import 'package:pickorbeet/features/notifications/notification_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'session_notifier.g.dart';
@@ -55,6 +56,7 @@ class SessionNotifier extends _$SessionNotifier {
   }
 
   Future<void> signOut() async {
+    await ref.read(notificationRepositoryProvider).unregisterThisDevice();
     final tokens = ref.read(authLocalRepositoryProvider);
     final refresh = tokens.getRefreshToken();
     if (refresh != null) {

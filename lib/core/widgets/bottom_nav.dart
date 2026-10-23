@@ -79,12 +79,19 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return AnimatedContainer(
+      duration: Motion.of(context, Motion.medium),
+      curve: Motion.emphasized,
       decoration: BoxDecoration(
-        color: AppPallete.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
-          BoxShadow(color: AppPallete.shadow.withValues(alpha: 0.08), blurRadius: 18, offset: const Offset(0, -6)),
+          BoxShadow(
+            color: (dark ? Colors.black : AppPallete.shadow).withValues(alpha: dark ? 0.35 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, -6),
+          ),
         ],
       ),
       child: SizedBox(
@@ -114,22 +121,23 @@ class AppBottomNav extends StatelessWidget {
                         ),
                     ],
                   ),
-                  AnimatedPositioned(
-                    duration: Motion.of(context, Motion.medium),
-                    curve: Motion.emphasized,
-                    top: _indicatorTop,
-                    left: tabWidth * currentIndex + (tabWidth - _indicatorSize.width) / 2,
-                    child: IgnorePointer(
-                      child: Container(
-                        width: _indicatorSize.width,
-                        height: _indicatorSize.height,
-                        decoration: const BoxDecoration(
-                          color: AppPallete.primary,
-                          borderRadius: BorderRadius.all(Radius.circular(2)),
+                  if (currentIndex >= 0 && currentIndex < _tabs.length)
+                    AnimatedPositioned(
+                      duration: Motion.of(context, Motion.medium),
+                      curve: Motion.emphasized,
+                      top: _indicatorTop,
+                      left: tabWidth * currentIndex + (tabWidth - _indicatorSize.width) / 2,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: _indicatorSize.width,
+                          height: _indicatorSize.height,
+                          decoration: const BoxDecoration(
+                            color: AppPallete.primary,
+                            borderRadius: BorderRadius.all(Radius.circular(2)),
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               );
             },
@@ -162,7 +170,10 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? AppPallete.primary : AppPallete.navInactive;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final color = active
+        ? (dark ? const Color(0xFF7AA2FF) : AppPallete.primary)
+        : (dark ? const Color(0xFF9AA6C0) : AppPallete.navInactive);
     final duration = Motion.of(context, Motion.short);
     return Semantics(
       selected: active,

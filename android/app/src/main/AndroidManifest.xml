@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission
         android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application
         android:label="PickOrbeet"
         android:name="${applicationName}"
@@ -28,6 +31,9 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="orders"/>
     </application>
     <!-- Package visibility for url_launcher (tracking pages, phone, email) and text processing. -->
     <queries>

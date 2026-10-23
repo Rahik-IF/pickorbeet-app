@@ -141,6 +141,38 @@ class ProductVariant {
   String get label => [size, color].whereType<String>().where((v) => v.isNotEmpty).join(' / ');
 }
 
+double? _readRating(Json map) {
+  for (final key in const ['rating', 'average_rating', 'avg_rating']) {
+    final value = map[key];
+    final double? rating;
+    if (value is num) {
+      rating = value.toDouble();
+    } else if (value is String) {
+      rating = double.tryParse(value);
+    } else {
+      rating = null;
+    }
+    if (rating != null && rating > 0 && rating <= 5) return rating;
+  }
+  return null;
+}
+
+int? _readReviewCount(Json map) {
+  for (final key in const ['review_count', 'reviews_count', 'total_reviews']) {
+    final value = map[key];
+    final int? count;
+    if (value is num) {
+      count = value.toInt();
+    } else if (value is String) {
+      count = int.tryParse(value);
+    } else {
+      count = null;
+    }
+    if (count != null && count > 0) return count;
+  }
+  return null;
+}
+
 /// A product as it appears in lists and rails.
 @immutable
 class ProductSummary {
@@ -160,6 +192,8 @@ class ProductSummary {
     this.comparePrice,
     this.primaryImage,
     this.subcategoryName,
+    this.rating,
+    this.reviewCount,
   });
 
   factory ProductSummary.fromMap(Json map) => ProductSummary(
@@ -178,6 +212,8 @@ class ProductSummary {
         categoryName: map.str('category_name'),
         subcategoryName: map.strOrNull('subcategory_name'),
         variants: map.listOf('variants', ProductVariant.fromMap),
+        rating: _readRating(map),
+        reviewCount: _readReviewCount(map),
       );
 
   final String id;
@@ -195,6 +231,12 @@ class ProductSummary {
   final String categoryName;
   final String? subcategoryName;
   final List<ProductVariant> variants;
+
+  /// Shopper rating on a 5-point scale, when the catalog sends one.
+  final double? rating;
+
+  /// Number of reviews behind [rating]. Absent when the catalog has no count.
+  final int? reviewCount;
 
   bool get hasDiscount =>
       comparePrice != null && Formatters.decimal(comparePrice) > Formatters.decimal(price);

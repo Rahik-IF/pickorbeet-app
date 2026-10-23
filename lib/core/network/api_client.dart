@@ -38,6 +38,9 @@ class ApiClient {
   /// Runs after the server rejects the refresh token and the saved tokens are cleared.
   void Function()? onSessionExpired;
 
+  /// Runs while the access token is still valid, just before a dead session is cleared.
+  Future<void> Function()? beforeSessionExpired;
+
   Future<_RefreshResult>? _refreshing;
 
   Future<http.Response> get(String path, {Map<String, Object?>? query, bool authenticated = true}) =>
@@ -117,7 +120,25 @@ class ApiClient {
     return _RefreshResult.unavailable;
   }
 
+  /// Returns a current access token. [force] asks the server for a new one.
+  Future<String?> ensureAccess({bool force = false}) async {
+    final current = _tokens.getAccessToken();
+    if (!force && current != null && current.isNotEmpty) return current;
+    if (!_tokens.hasSession) return null;
+    final result = await _refresh(current ?? '');
+    if (result == _RefreshResult.refreshed) return _tokens.getAccessToken();
+    return null;
+  }
+
   Future<void> _expireSession() async {
+    final hook = beforeSessionExpired;
+    if (hook != null) {
+      try {
+        await hook();
+      } on Object {
+        // Signing out still proceeds when the device unregister fails.
+      }
+    }
     await _tokens.clear();
     onSessionExpired?.call();
   }

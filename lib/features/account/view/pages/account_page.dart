@@ -13,7 +13,6 @@ import 'package:pickorbeet/core/router/tab_reselect.dart';
 import 'package:pickorbeet/core/theme/app_pallete.dart';
 import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
-import 'package:pickorbeet/core/widgets/app_button.dart';
 import 'package:pickorbeet/core/widgets/app_header.dart';
 import 'package:pickorbeet/core/widgets/section.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
@@ -83,16 +82,16 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         children: [
           const TabHeader(),
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refresh,
-              color: AppPallete.primary,
-              backgroundColor: AppPallete.surface,
-              child: ListView(
-                controller: _scroll,
-                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                padding: const EdgeInsets.fromLTRB(AccountPage.margin, 14, AccountPage.margin, 24),
-                children: signedIn
-                    ? [
+            child: signedIn
+                ? RefreshIndicator(
+                    onRefresh: _refresh,
+                    color: AppPallete.primary,
+                    backgroundColor: AppPallete.surface,
+                    child: ListView(
+                      controller: _scroll,
+                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                      padding: const EdgeInsets.fromLTRB(AccountPage.margin, 14, AccountPage.margin, 24),
+                      children: [
                         _ProfileCard(user: user).entrance(),
                         const SizedBox(height: 12),
                         const _OrdersCard().entrance(index: 1),
@@ -102,12 +101,10 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                         const _MembershipBanner().entrance(index: 3),
                         const SizedBox(height: 12),
                         _AccountList(onSignOut: _signOut).entrance(index: 4),
-                      ]
-                    : const [
-                        _SignedOutAccount(),
                       ],
-              ),
-            ),
+                    ),
+                  )
+                : const _SignedOutAccount(),
           ),
         ],
       ),
@@ -121,40 +118,276 @@ class _SignedOutAccount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 36),
-      child: Column(
+    return const Stack(
+      children: [
+        _WelcomeBackdrop(),
+        Padding(
+          padding: EdgeInsets.fromLTRB(22, 8, 22, 12),
+          child: Column(
+            children: [
+              Spacer(flex: 2),
+              _WelcomeAvatar(),
+              SizedBox(height: 18),
+              Text(
+                'Welcome back',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF07133F), letterSpacing: -0.4),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Sign in to enjoy a smarter shopping experience.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14.5, height: 1.35, color: Color(0xFF6A7594)),
+              ),
+              SizedBox(height: 22),
+              _PerkRow(),
+              SizedBox(height: 26),
+              GoogleSignInButton(),
+              SizedBox(height: 16),
+              _EmailDivider(),
+              SizedBox(height: 16),
+              _WelcomeAction(
+                label: 'Sign in with email',
+                filled: true,
+                icon: PhosphorIconsBold.envelopeSimple,
+                trailing: PhosphorIconsBold.arrowRight,
+                onTap: _openEmailSignIn,
+              ),
+              SizedBox(height: 12),
+              _WelcomeAction(
+                label: 'Create account',
+                icon: PhosphorIconsBold.userPlus,
+                onTap: _openRegister,
+              ),
+              Spacer(),
+              _TrustLine(),
+              SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+void _openEmailSignIn(BuildContext context) => context.push(Routes.loginFrom(Routes.account));
+
+void _openRegister(BuildContext context) => context.push(Routes.register);
+
+class _WelcomeBackdrop extends StatelessWidget {
+  const _WelcomeBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFFF7F9FE),
+      child: Stack(
+        children: [
+          Positioned(left: -80, top: 30, child: _Blob(color: Color(0x334C7DFF), size: 220)),
+          Positioned(right: -70, top: -10, child: _Blob(color: Color(0x33FF8A3D), size: 200)),
+          Positioned(right: 24, top: 150, child: _Blob(color: Color(0x22FFB067), size: 90)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Blob extends StatelessWidget {
+  const _Blob({required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _WelcomeAvatar extends StatelessWidget {
+  const _WelcomeAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 108,
+      height: 108,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
         children: [
           Container(
-            width: 84,
-            height: 84,
-            decoration: const BoxDecoration(color: Color(0xFFE7EEFB), shape: BoxShape.circle),
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF7EB0FF), Color(0xFF2F6BFF)],
+              ),
+              boxShadow: [BoxShadow(color: Color(0x332F6BFF), blurRadius: 18, offset: Offset(0, 8))],
+            ),
             alignment: Alignment.center,
-            child: const Icon(PhosphorIconsRegular.user, size: 40, color: Color(0xFF8AA0C8)),
+            child: const Icon(PhosphorIconsFill.user, size: 46, color: Colors.white),
           ),
-          const SizedBox(height: 18),
-          Text('Sign in to your account', style: AppTypography.titleLarge.copyWith(fontSize: 22, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Text(
-            'Track orders, save addresses, and check out faster.',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodyLarge.copyWith(color: const Color(0xFF5C6984), height: 1.4),
-          ),
-          const SizedBox(height: 28),
-          const GoogleSignInButton(),
-          const SizedBox(height: 10),
-          AppButton(
-            label: 'Sign in with email',
-            onPressed: () => context.push(Routes.loginFrom(Routes.account)),
-          ),
-          const SizedBox(height: 10),
-          AppButton(
-            label: 'Create account',
-            variant: AppButtonVariant.outline,
-            onPressed: () => context.push(Routes.register),
+          Positioned(
+            right: 6,
+            top: 6,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: AppPallete.accent,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFF7F9FE), width: 3),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(PhosphorIconsFill.sparkle, size: 13, color: Colors.white),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PerkRow extends StatelessWidget {
+  const _PerkRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(child: _Perk(icon: PhosphorIconsBold.package, tint: Color(0xFFE8F0FF), color: Color(0xFF3B6FE8), label: 'Track orders')),
+        _PerkDivider(),
+        Expanded(child: _Perk(icon: PhosphorIconsBold.heart, tint: Color(0xFFFFF1E8), color: Color(0xFFFF7A2F), label: 'Save favourites')),
+        _PerkDivider(),
+        Expanded(child: _Perk(icon: PhosphorIconsBold.lightning, tint: Color(0xFFEAF3FF), color: Color(0xFF3B6FE8), label: 'Faster checkout')),
+      ],
+    );
+  }
+}
+
+class _Perk extends StatelessWidget {
+  const _Perk({required this.icon, required this.tint, required this.color, required this.label});
+
+  final IconData icon;
+  final Color tint;
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 18, color: color),
+        ),
+        const SizedBox(height: 8),
+        Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11.5, color: Color(0xFF5C6784), fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+}
+
+class _PerkDivider extends StatelessWidget {
+  const _PerkDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 36, color: const Color(0xFFE3E8F2));
+  }
+}
+
+class _EmailDivider extends StatelessWidget {
+  const _EmailDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(child: Divider(color: Color(0xFFE3E8F2))),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10),
+          child: Text('OR CONTINUE WITH EMAIL', style: TextStyle(fontSize: 11, letterSpacing: 0.6, color: Color(0xFF98A2BE), fontWeight: FontWeight.w600)),
+        ),
+        Expanded(child: Divider(color: Color(0xFFE3E8F2))),
+      ],
+    );
+  }
+}
+
+class _WelcomeAction extends StatelessWidget {
+  const _WelcomeAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.trailing,
+    this.filled = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final IconData? trailing;
+  final bool filled;
+  final void Function(BuildContext context) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = filled ? Colors.white : const Color(0xFF1237D6);
+    return Pressable(
+      pressedScale: 0.98,
+      semanticLabel: label,
+      onTap: () => onTap(context),
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: filled ? AppPallete.accent : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: filled ? null : Border.all(color: const Color(0xFFD7E2FF)),
+          boxShadow: filled
+              ? const [BoxShadow(color: Color(0x55FE7818), blurRadius: 16, offset: Offset(0, 8))]
+              : const [BoxShadow(color: Color(0x0A14289A), blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: foreground),
+            Expanded(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: foreground),
+              ),
+            ),
+            Icon(trailing ?? icon, size: 18, color: trailing == null ? Colors.transparent : foreground),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrustLine extends StatelessWidget {
+  const _TrustLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(PhosphorIconsFill.shieldCheck, size: 14, color: Color(0xFF7C8AAB)),
+        SizedBox(width: 6),
+        Text('Your account, your shopping — all in one place.', style: TextStyle(fontSize: 12, color: Color(0xFF7C8AAB))),
+      ],
     );
   }
 }
@@ -350,7 +583,7 @@ class _StatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <(IconData, String, int?, TileTint, String)>[
-      (PhosphorIconsFill.package, 'Pending', summary?.pending, DashboardPalette.statPending, 'open'),
+      (PhosphorIconsFill.package, 'Pending', summary?.processingCount, DashboardPalette.statPending, 'processing'),
       (PhosphorIconsFill.truck, 'Delivered', summary?.delivered, DashboardPalette.statDelivered, 'delivered'),
       (PhosphorIconsBold.arrowUUpLeft, 'Cancelled', summary?.cancelled, DashboardPalette.statCancelled, 'cancelled'),
       (PhosphorIconsBold.arrowClockwise, 'Returned', summary?.returned, DashboardPalette.statReturned, 'refunded'),

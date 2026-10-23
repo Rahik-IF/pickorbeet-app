@@ -7,10 +7,12 @@ import 'package:pickorbeet/app.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
 import 'package:pickorbeet/core/theme/theme.dart';
 import 'package:pickorbeet/features/auth/repositories/auth_local_repository.dart';
+import 'package:pickorbeet/features/notifications/notification_realtime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await startFirebase();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(AppTheme.overlayOnDark);

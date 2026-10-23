@@ -172,6 +172,101 @@ abstract final class AppTheme {
     );
   }
 
+  /// Dark counterpart used when Settings turns dark mode on.
+  static ThemeData dark() {
+    const ink = Color(0xFFF4F7FF);
+    const muted = Color(0xFFA3AEC6);
+    const surface = Color(0xFF172238);
+    const page = Color(0xFF0E1628);
+    const line = Color(0xFF2C3850);
+    final scheme = ColorScheme.fromSeed(seedColor: AppPallete.primary, brightness: Brightness.dark).copyWith(
+      primary: const Color(0xFF7AA2FF),
+      onPrimary: const Color(0xFF04122E),
+      primaryContainer: const Color(0xFF24345C),
+      onPrimaryContainer: const Color(0xFFD6E4FF),
+      secondary: AppPallete.accent,
+      onSecondary: const Color(0xFF2A1200),
+      secondaryContainer: const Color(0xFF3A2416),
+      onSecondaryContainer: const Color(0xFFFFD7B8),
+      surface: surface,
+      onSurface: ink,
+      onSurfaceVariant: muted,
+      surfaceContainerLowest: const Color(0xFF0B1222),
+      surfaceContainerLow: page,
+      surfaceContainer: surface,
+      surfaceContainerHigh: const Color(0xFF1E2C46),
+      error: const Color(0xFFFF8A86),
+      onError: const Color(0xFF3A1014),
+      outline: line,
+      outlineVariant: line,
+      shadow: Colors.black,
+      scrim: Colors.black,
+    );
+    final text = AppTypography.textTheme().apply(bodyColor: ink, displayColor: ink);
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: page,
+      canvasColor: page,
+      fontFamily: AppTypography.family,
+      fontFamilyFallback: AppTypography.fallback,
+      textTheme: text,
+      primaryTextTheme: text,
+      splashFactory: InkRipple.splashFactory,
+      highlightColor: Colors.white.withValues(alpha: 0.04),
+      splashColor: Colors.white.withValues(alpha: 0.08),
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: SharedAxisPageTransitionsBuilder(
+            transitionType: SharedAxisTransitionType.horizontal,
+            fillColor: page,
+          ),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        systemOverlayStyle: overlayOnDark,
+      ),
+      iconTheme: const IconThemeData(color: ink, size: 22),
+      dividerTheme: const DividerThemeData(color: line, thickness: 1, space: 1),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        modalBackgroundColor: surface,
+        modalBarrierColor: Color(0xC0000000),
+        showDragHandle: true,
+        dragHandleColor: line,
+        dragHandleSize: Size(36, 4),
+        shape: RoundedRectangleBorder(borderRadius: AppRadii.sheetBorder),
+        clipBehavior: Clip.antiAlias,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(18))),
+        titleTextStyle: AppTypography.titleMedium.copyWith(fontSize: 16, color: ink),
+        contentTextStyle: AppTypography.bodyLarge.copyWith(color: muted),
+        barrierColor: const Color(0xC0000000),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF24324C),
+        contentTextStyle: AppTypography.bodyLarge.copyWith(color: ink, fontWeight: FontWeight.w500),
+        actionTextColor: AppPallete.accent,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadii.xlBorder),
+        elevation: 0,
+        insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      ),
+    );
+  }
+
   static OutlineInputBorder _outline(Color color, {double width = 1}) => OutlineInputBorder(
         borderRadius: AppRadii.xlBorder,
         borderSide: BorderSide(color: color, width: width),

@@ -54,29 +54,41 @@ class _GoogleSignInButtonState extends ConsumerState<GoogleSignInButton> {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: _busy ? null : _signIn,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(48),
-        backgroundColor: AppPallete.surface,
-        foregroundColor: AppPallete.ink,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        side: const BorderSide(color: Color(0xFFE3E8F4)),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: _busy ? null : _signIn,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          height: 54,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE6ECF6)),
+            boxShadow: const [BoxShadow(color: Color(0x1214289A), blurRadius: 14, offset: Offset(0, 6))],
+          ),
+          child: Center(
+            child: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppPallete.primary),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const _GoogleMark(),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.label,
+                        style: AppTypography.label.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF10204A)),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
       ),
-      child: _busy
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppPallete.primary),
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const _GoogleMark(),
-                const SizedBox(width: 10),
-                Text(widget.label, style: AppTypography.label.copyWith(fontSize: 15, fontWeight: FontWeight.w700, color: AppPallete.ink)),
-              ],
-            ),
     );
   }
 }

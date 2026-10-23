@@ -50,3 +50,7 @@ app.*.map.json
 
 # Golden test failure output
 **/failures/
+
+# Firebase app configs. Download these from the Firebase project; do not commit them.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist

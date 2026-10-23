@@ -13,6 +13,7 @@ class AddressModel {
     required this.city,
     required this.district,
     this.addressType = 'shipping',
+    this.label = '',
     this.addressLine2 = '',
     this.postalCode = '',
     this.country = 'Bangladesh',
@@ -22,6 +23,7 @@ class AddressModel {
 
   final String id;
   final String addressType;
+  final String label;
   final String fullName;
   final String phone;
   final String addressLine1;
@@ -45,6 +47,7 @@ class AddressModel {
   factory AddressModel.fromMap(Json map) => AddressModel(
         id: map.str('id'),
         addressType: map.str('address_type', 'shipping'),
+        label: map.str('label'),
         fullName: map.str('full_name'),
         phone: map.str('phone'),
         addressLine1: map.str('address_line1'),
@@ -60,6 +63,7 @@ class AddressModel {
   /// Body for create and update. The server sets `user` and `is_inside_dhaka`.
   Json toMap() => {
         'address_type': addressType,
+        'label': label,
         'full_name': fullName,
         'phone': phone,
         'address_line1': addressLine1,
@@ -71,7 +75,10 @@ class AddressModel {
         'is_default': isDefault,
       };
 
+  String get placeName => label.trim().isEmpty ? 'Address' : label.trim();
+
   AddressModel copyWith({
+    String? label,
     String? fullName,
     String? phone,
     String? addressLine1,
@@ -84,6 +91,7 @@ class AddressModel {
     return AddressModel(
       id: id,
       addressType: addressType,
+      label: label ?? this.label,
       fullName: fullName ?? this.fullName,
       phone: phone ?? this.phone,
       addressLine1: addressLine1 ?? this.addressLine1,

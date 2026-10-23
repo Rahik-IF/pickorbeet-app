@@ -10,6 +10,7 @@ import 'package:pickorbeet/core/providers/cart_notifier.dart';
 import 'package:pickorbeet/core/router/routes.dart';
 import 'package:pickorbeet/core/theme/app_pallete.dart';
 import 'package:pickorbeet/core/theme/app_typography.dart';
+import 'package:pickorbeet/features/notifications/notification_inbox.dart';
 
 /// Number of units in the cart, or 0 while it loads.
 final cartCountProvider = Provider<int>(
@@ -59,9 +60,12 @@ class CountBadge extends StatelessWidget {
 
 /// Header cart button with a badge; wiggles when an item is added.
 class HeaderCartButton extends ConsumerWidget {
-  const HeaderCartButton({super.key, this.color = AppPallete.onDark});
+  const HeaderCartButton({super.key, this.color = AppPallete.onDark, this.showZero = false});
 
   final Color color;
+
+  /// The vouchers header draws the orange count even when the cart is empty.
+  final bool showZero;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,7 +86,7 @@ class HeaderCartButton extends ConsumerWidget {
                 count: count,
                 child: Icon(PhosphorIconsBold.shoppingCartSimple, size: 22.4, color: color),
               ),
-              if (count > 0)
+              if (count > 0 || showZero)
                 Transform.translate(
                   offset: const Offset(14.4, -9.3),
                   child: CountBadge(count: count, size: 16.6),
@@ -143,23 +147,35 @@ class _WiggleState extends State<_Wiggle> with SingleTickerProviderStateMixin {
   }
 }
 
-/// Header bell. There is no notifications API yet, so it opens the empty notifications page.
-class HeaderBellButton extends StatelessWidget {
+/// Header bell. Guests are sent to sign in because the inbox route is protected.
+class HeaderBellButton extends ConsumerWidget {
   const HeaderBellButton({super.key, this.color = AppPallete.onDark});
 
   final Color color;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(notificationInboxProvider.select((inbox) => inbox.unreadCount));
     return Pressable(
-      semanticLabel: 'Notifications',
+      semanticLabel: count == 0 ? 'Notifications' : 'Notifications, $count unread',
       onTap: () => context.push(Routes.notifications),
       child: SizedBox(
         width: 44,
         height: 44,
-        child: Transform.translate(
-          offset: const Offset(0, -0.65),
-          child: Icon(PhosphorIconsBold.bell, size: 21.6, color: color),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Transform.translate(
+              offset: const Offset(0, -0.65),
+              child: Icon(PhosphorIconsBold.bell, size: 21.6, color: color),
+            ),
+            if (count > 0)
+              Transform.translate(
+                offset: const Offset(12, -10),
+                child: CountBadge(count: count, size: 16),
+              ),
+          ],
         ),
       ),
     );
