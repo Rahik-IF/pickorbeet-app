@@ -195,6 +195,17 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.runAsync(() async {
+      final context = tester.element(find.byType(CheckoutPage));
+      await precacheImage(
+        const AssetImage('assets/brand/bag_mark_on_dark.png'),
+        context,
+      );
+      await precacheImage(
+        const AssetImage('assets/brand/nagad_word.png'),
+        context,
+      );
+    });
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }

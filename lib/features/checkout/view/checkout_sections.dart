@@ -629,22 +629,21 @@ class _CheckoutLine extends StatelessWidget {
         ? item.shortDescription.trim()
         : item.variantLabel;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 68,
-          height: 68,
+          width: 64,
+          height: 64,
           child: Stack(
             children: [
               AppNetworkImage(
                 url: item.productImage,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 background: const Color(0xFFF3F5FA),
               ),
               if (item.hasDiscount)
                 Positioned(
-                  left: 4,
-                  top: 4,
+                  left: 0,
+                  top: 0,
                   child: DiscountBadge(
                     percent: item.discountPercentage,
                     padding: const EdgeInsets.symmetric(
@@ -668,20 +667,22 @@ class _CheckoutLine extends StatelessWidget {
                 style: AppTypography.titleSmall.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  height: 1.25,
+                  height: 1.2,
                 ),
               ),
-              if (subtitle.isNotEmpty)
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodyLarge.copyWith(
                     fontSize: 11.5,
-                    height: 1.3,
+                    height: 1.25,
                     color: CheckoutColors.body,
                   ),
                 ),
+              ],
               if (item.isOutOfStock)
                 Text(
                   'Out of stock',
@@ -690,38 +691,31 @@ class _CheckoutLine extends StatelessWidget {
                     fontSize: 11,
                   ),
                 ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: PriceText(
-                      price: item.unitPrice,
-                      comparePrice: item.comparePrice,
-                      style: AppTypography.price.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppPallete.ink,
-                      ),
-                      strikeStyle: AppTypography.strike.copyWith(
-                        fontSize: 12,
-                        color: const Color(0xFFB0B6C6),
-                      ),
-                    ),
-                  ),
-                  QuantityStepper(
-                    value: item.quantity,
-                    max: item.maxQuantity,
-                    enabled: !item.isOutOfStock,
-                    height: 28,
-                    buttonWidth: 28,
-                    valueWidth: 24,
-                    radius: 8,
-                    onChanged: onQuantity,
-                  ),
-                ],
+              const SizedBox(height: 6),
+              PriceText(
+                price: item.unitPrice,
+                comparePrice: item.comparePrice,
+                style: AppTypography.price.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppPallete.ink,
+                ),
+                strikeStyle: AppTypography.strike.copyWith(
+                  fontSize: 12,
+                  color: const Color(0xFFB0B6C6),
+                ),
               ),
             ],
           ),
+        ),
+        const SizedBox(width: 8),
+        QuantityStepper(
+          value: item.quantity,
+          max: item.maxQuantity,
+          enabled: !item.isOutOfStock,
+          valueWidth: 22,
+          radius: 7,
+          onChanged: onQuantity,
         ),
       ],
     );
@@ -754,7 +748,7 @@ class PaymentMethodCard extends StatelessWidget {
                 child: Icon(
                   PhosphorIconsRegular.creditCard,
                   size: 18,
-                  color: Color(0xFF5B6A88),
+                  color: CheckoutColors.link,
                 ),
               ),
               SizedBox(width: 8),
@@ -851,7 +845,7 @@ class _PaymentRow extends StatelessWidget {
       child: AnimatedContainer(
         duration: duration,
         curve: Motion.emphasizedDecelerate,
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         decoration: BoxDecoration(
           color: selected ? CheckoutColors.selectedFill : AppPallete.surface,
           borderRadius: BorderRadius.circular(CheckoutColors.choiceRadius),
@@ -866,6 +860,8 @@ class _PaymentRow extends StatelessWidget {
           children: [
             CheckoutRadio(selected: selected),
             const SizedBox(width: 10),
+            _BrandTile(method),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -877,16 +873,17 @@ class _PaymentRow extends StatelessWidget {
                     style: AppTypography.titleSmall.copyWith(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w800,
-                      height: 1.15,
+                      height: 1.1,
                     ),
                   ),
+                  const SizedBox(height: 1),
                   Text(
                     method.subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.bodyLarge.copyWith(
                       fontSize: 11.5,
-                      height: 1.3,
+                      height: 1.2,
                       color: CheckoutColors.body,
                     ),
                   ),
@@ -902,6 +899,66 @@ class _PaymentRow extends StatelessWidget {
   }
 }
 
+class _BrandTile extends StatelessWidget {
+  const _BrandTile(this.method);
+
+  final CheckoutPayment method;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (method) {
+      CheckoutPayment.bkash => const _TintedMark(
+        color: _BkashBird.pink,
+        child: CustomPaint(
+          size: Size(16, 12),
+          painter: _BkashBird(color: AppPallete.onDark),
+        ),
+      ),
+      CheckoutPayment.nagad => const CustomPaint(
+        size: Size(26, 26),
+        painter: _NagadOrbPainter(),
+      ),
+      CheckoutPayment.card => const _TintedMark(
+        color: Color(0xFF3A7EF0),
+        child: Icon(
+          PhosphorIconsRegular.creditCard,
+          size: 15,
+          color: AppPallete.onDark,
+        ),
+      ),
+      CheckoutPayment.cod => const _TintedMark(
+        color: Color(0xFF2FCBB8),
+        child: Icon(
+          PhosphorIconsRegular.wallet,
+          size: 15,
+          color: AppPallete.onDark,
+        ),
+      ),
+    };
+  }
+}
+
+class _TintedMark extends StatelessWidget {
+  const _TintedMark({required this.color, required this.child});
+
+  final Color color;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: child,
+    );
+  }
+}
+
 class _PaymentMark extends StatelessWidget {
   const _PaymentMark({required this.method});
 
@@ -911,75 +968,62 @@ class _PaymentMark extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (method) {
       CheckoutPayment.bkash => const CustomPaint(
-        size: Size(36, 22),
-        painter: _BkashPainter(),
+        size: Size(34, 18),
+        painter: _BkashBird(color: _BkashBird.pink),
       ),
-      CheckoutPayment.nagad => const _NagadMark(),
+      CheckoutPayment.nagad => const _NagadWordmark(),
       CheckoutPayment.card => const _CardMarks(),
-      CheckoutPayment.cod => const _CodMark(),
+      CheckoutPayment.cod => const CustomPaint(
+        size: Size(36, 24),
+        painter: _CashInHandPainter(),
+      ),
     };
   }
 }
 
-class _BkashPainter extends CustomPainter {
-  const _BkashPainter();
+class _BkashBird extends CustomPainter {
+  const _BkashBird({required this.color});
+
+  final Color color;
+
+  static const pink = Color(0xFFE2136E);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFFE2136E);
+    final w = size.width;
+    final h = size.height;
     final path = Path()
-      ..moveTo(size.width * 0.05, size.height * 0.78)
-      ..cubicTo(
-        size.width * 0.28,
-        size.height * 0.05,
-        size.width * 0.62,
-        size.height * 0.02,
-        size.width * 0.98,
-        size.height * 0.22,
-      )
-      ..cubicTo(
-        size.width * 0.62,
-        size.height * 0.28,
-        size.width * 0.58,
-        size.height * 0.55,
-        size.width * 0.7,
-        size.height * 0.96,
-      )
-      ..cubicTo(
-        size.width * 0.42,
-        size.height * 0.62,
-        size.width * 0.22,
-        size.height * 0.7,
-        size.width * 0.05,
-        size.height * 0.78,
-      )
+      ..moveTo(0, h * 0.58)
+      ..cubicTo(w * 0.18, h * 0.58, w * 0.32, h * 0.08, w * 0.62, h * 0.06)
+      ..cubicTo(w * 0.82, h * 0.04, w * 0.94, h * 0.20, w, h * 0.40)
+      ..cubicTo(w * 0.78, h * 0.32, w * 0.66, h * 0.46, w * 0.74, h * 0.64)
+      ..cubicTo(w * 0.82, h * 0.86, w * 0.58, h * 0.98, w * 0.46, h * 0.70)
+      ..cubicTo(w * 0.36, h * 0.52, w * 0.20, h * 0.66, w * 0.06, h * 0.90)
+      ..cubicTo(w * 0.14, h * 0.68, w * 0.04, h * 0.64, 0, h * 0.58)
       ..close();
-    canvas.drawPath(path, paint);
+    canvas.drawPath(path, Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(covariant _BkashPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _BkashBird oldDelegate) =>
+      oldDelegate.color != color;
 }
 
-class _NagadMark extends StatelessWidget {
-  const _NagadMark();
+class _NagadWordmark extends StatelessWidget {
+  const _NagadWordmark();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return const Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const CustomPaint(size: Size(18, 18), painter: _NagadOrbPainter()),
-        const SizedBox(width: 3),
-        Text(
-          'নগদ',
-          textScaler: TextScaler.noScaling,
-          style: AppTypography.titleSmall.copyWith(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFFE10600),
-            height: 1,
-          ),
+        CustomPaint(size: Size(18, 18), painter: _NagadOrbPainter()),
+        SizedBox(width: 4),
+        Image(
+          image: AssetImage('assets/brand/nagad_word.png'),
+          height: 13,
+          fit: BoxFit.contain,
+          semanticLabel: 'নগদ',
         ),
       ],
     );
@@ -991,21 +1035,28 @@ class _NagadOrbPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final bounds = Offset.zero & size;
     final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    canvas.saveLayer(bounds, Paint());
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFFFF6A00));
     canvas.drawCircle(
-      center,
-      size.width / 2,
-      Paint()..color = const Color(0xFFFF5A00),
+      center.translate(radius * 0.34, -radius * 0.06),
+      radius * 0.68,
+      Paint()
+        ..blendMode = BlendMode.dstOut
+        ..color = const Color(0xFFFFFFFF),
+    );
+    canvas.restore();
+    canvas.drawCircle(
+      center.translate(radius * 0.02, radius * 0.08),
+      radius * 0.34,
+      Paint()..color = const Color(0xFFFF6A00),
     );
     canvas.drawCircle(
-      center.translate(2.4, -0.6),
-      size.width / 2.35,
-      Paint()..color = AppPallete.onDark,
-    );
-    canvas.drawCircle(
-      center.translate(4.2, -1.1),
-      size.width / 3.1,
-      Paint()..color = const Color(0xFFFF5A00),
+      center.translate(-radius * 0.08, radius * 0.28),
+      radius * 0.16,
+      Paint()..color = const Color(0xFFE23B2F),
     );
   }
 
@@ -1057,12 +1108,12 @@ class _MastercardMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SizedBox(
-      width: 20,
-      height: 12,
+      width: 22,
+      height: 14,
       child: Stack(
         children: [
           Positioned(left: 0, top: 0, child: _Coin(color: Color(0xFFEB001B))),
-          Positioned(right: 0, top: 0, child: _Coin(color: Color(0xFFF79E1B))),
+          Positioned(left: 8, top: 0, child: _Coin(color: Color(0xFFF79E1B))),
         ],
       ),
     );
@@ -1077,8 +1128,8 @@ class _Coin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 12,
-      height: 12,
+      width: 14,
+      height: 14,
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
@@ -1089,49 +1140,78 @@ class _AmexMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      width: 28,
+      height: 18,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF2E77BC),
-        borderRadius: BorderRadius.circular(2),
+        color: const Color(0xFF1F72CD),
+        borderRadius: BorderRadius.circular(3),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-        child: Text(
-          'AMEX',
-          textScaler: TextScaler.noScaling,
-          style: AppTypography.labelSmall.copyWith(
-            color: AppPallete.onDark,
-            fontSize: 7,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.3,
-            height: 1,
-          ),
+      child: Text(
+        'AMEX',
+        textScaler: TextScaler.noScaling,
+        style: AppTypography.labelSmall.copyWith(
+          color: AppPallete.onDark,
+          fontSize: 7,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.2,
+          height: 1,
         ),
       ),
     );
   }
 }
 
-class _CodMark extends StatelessWidget {
-  const _CodMark();
+class _CashInHandPainter extends CustomPainter {
+  const _CashInHandPainter();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 30,
-      height: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: CheckoutColors.secureFill,
-        borderRadius: BorderRadius.circular(8),
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final hand = Paint()..color = const Color(0xFFF6D2B0);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.34, h * 0.04, w * 0.58, h * 0.38),
+        const Radius.circular(2),
       ),
-      child: const Icon(
-        PhosphorIconsFill.money,
-        size: 16,
-        color: CheckoutColors.secure,
+      Paint()..color = const Color(0xFF4C8DFF),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(w * 0.34, h * 0.14, w * 0.58, h * 0.07),
+      Paint()..color = const Color(0xFFD6E6FF),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.08, h * 0.30, w * 0.68, h * 0.36),
+        const Radius.circular(2),
       ),
+      Paint()..color = const Color(0xFF3DDC97),
+    );
+    canvas.drawCircle(
+      Offset(w * 0.42, h * 0.48),
+      h * 0.09,
+      Paint()..color = const Color(0xFFEFFFF6),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.16, h * 0.58, w * 0.66, h * 0.38),
+        Radius.circular(h * 0.16),
+      ),
+      hand,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, h * 0.46, w * 0.22, h * 0.24),
+        Radius.circular(h * 0.1),
+      ),
+      hand,
     );
   }
+
+  @override
+  bool shouldRepaint(covariant _CashInHandPainter oldDelegate) => false;
 }
 
 class OrderSummaryCard extends StatelessWidget {
