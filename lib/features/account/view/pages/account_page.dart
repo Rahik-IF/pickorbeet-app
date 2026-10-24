@@ -80,7 +80,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
       backgroundColor: AppPallete.background,
       body: Column(
         children: [
-          const TabHeader(),
+          const TabHeader(heroTag: 'search-account'),
           Expanded(
             child: signedIn
                 ? RefreshIndicator(

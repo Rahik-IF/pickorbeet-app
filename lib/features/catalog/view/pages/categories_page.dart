@@ -82,7 +82,7 @@ class _CategoriesPageState extends ConsumerState<CategoriesPage> {
       backgroundColor: AppPallete.background,
       body: Column(
         children: [
-          const TabHeader(showBell: false),
+          const TabHeader(showBell: false, heroTag: 'search-categories'),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refresh,

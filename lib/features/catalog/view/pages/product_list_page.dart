@@ -253,57 +253,87 @@ class _Hero extends StatelessWidget {
   final VoidCallback onHome;
   final VoidCallback? onCategory;
 
+  static const _fallback = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF2F6BFF), Color(0xFF5B8CFF), Color(0xFFFF8A3D)],
+  );
+
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
+    final artwork = image?.trim();
+    final hasImage = artwork != null && artwork.isNotEmpty;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: AppTheme.overlayOnDark,
-      child: Container(
-        height: top + 168,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF2F6BFF), Color(0xFF5B8CFF), Color(0xFFFF8A3D)],
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(16, top + 10, 8, 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Breadcrumb(categoryName: categoryName, title: title, onHome: onHome, onCategory: onCategory),
-                    const Spacer(),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.titleLarge.copyWith(color: AppPallete.onDark, fontSize: 28, height: 1.05),
-                    ),
-                    if (subtitle.trim().isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle.trim(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodyLarge.copyWith(color: const Color(0xFFF4F7FF), fontSize: 14),
-                      ),
+      child: SizedBox(
+        height: top + 220,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasImage)
+              AppNetworkImage(
+                url: artwork,
+                alignment: Alignment.centerRight,
+                background: AppPallete.headerMid,
+              )
+            else
+              const DecoratedBox(decoration: BoxDecoration(gradient: _fallback)),
+            if (hasImage) ...[
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppPallete.headerEnd.withValues(alpha: 0.9),
+                      AppPallete.headerEnd.withValues(alpha: 0.55),
+                      AppPallete.headerEnd.withValues(alpha: 0),
                     ],
-                    const SizedBox(height: 8),
-                  ],
+                    stops: const [0, 0.42, 0.78],
+                  ),
                 ),
               ),
-              if (image != null)
-                SizedBox(
-                  width: 132,
-                  height: 132,
-                  child: AppNetworkImage(url: image, fit: BoxFit.contain, background: const Color(0x00FFFFFF)),
+              const Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 36,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x00F3F7FE), AppPallete.background],
+                    ),
+                  ),
                 ),
+              ),
             ],
-          ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, top + 10, 16, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Breadcrumb(categoryName: categoryName, title: title, onHome: onHome, onCategory: onCategory),
+                  const Spacer(),
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleLarge.copyWith(color: AppPallete.onDark, fontSize: 28, height: 1.05),
+                  ),
+                  if (subtitle.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyLarge.copyWith(color: const Color(0xFFF4F7FF), fontSize: 14),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

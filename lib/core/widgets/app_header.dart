@@ -17,7 +17,7 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback onMenu;
 
   /// Height below the status bar.
-  static const contentHeight = 48.9;
+  static const contentHeight = 56;
 
   static double heightOf(BuildContext context) => MediaQuery.paddingOf(context).top + contentHeight;
 
@@ -30,28 +30,27 @@ class HomeHeader extends StatelessWidget {
         child: SizedBox(
           height: top + contentHeight,
           child: Padding(
-            padding: EdgeInsets.only(top: top + 3, left: 16.1, right: 11.6),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                height: 34.2,
-                child: Row(
-                  children: [
-                    Pressable(
-                      pressedScale: 0.97,
-                      semanticLabel: 'PickOrbeet home',
-                      onTap: () => context.go(Routes.home),
-                      child: const BrandLockup.compact(),
+            padding: EdgeInsets.fromLTRB(14, top + 8, 12, 8),
+            child: SizedBox(
+              height: 40,
+              child: Row(
+                children: [
+                  Pressable(
+                    pressedScale: 0.97,
+                    semanticLabel: 'PickOrbeet home',
+                    onTap: () => context.go(Routes.home),
+                    child: const BrandLockup.compact(),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: SearchPill.compact(
+                      heroTag: 'search-home',
+                      onTap: () => context.push(Routes.search),
                     ),
-                    const Spacer(),
-                    SizedBox(
-                      width: 188.2,
-                      child: SearchPill.compact(onTap: () => context.push(Routes.search)),
-                    ),
-                    const SizedBox(width: 10),
-                    _MenuButton(onTap: onMenu),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  _MenuButton(onTap: onMenu),
+                ],
               ),
             ),
           ),
@@ -72,8 +71,8 @@ class _MenuButton extends StatelessWidget {
       semanticLabel: 'Menu',
       onTap: onTap,
       child: Container(
-        width: 34.2,
-        height: 34.2,
+        width: 36,
+        height: 36,
         decoration: const BoxDecoration(color: AppPallete.headerButton, shape: BoxShape.circle),
         alignment: Alignment.center,
         child: const CustomPaint(size: Size(11.73, 9.77), painter: _MenuGlyphPainter()),
@@ -111,10 +110,11 @@ class _MenuGlyphPainter extends CustomPainter {
 /// Tab header: logo with bell and cart, then a full-width search bar, on a gradient with rounded
 /// lower corners.
 class TabHeader extends StatelessWidget {
-  const TabHeader({super.key, this.showBell = true, this.showSearch = true});
+  const TabHeader({super.key, this.showBell = true, this.showSearch = true, this.heroTag = 'search-tab'});
 
   final bool showBell;
   final bool showSearch;
+  final String heroTag;
 
   static const contentHeight = 81.6;
   static const compactHeight = 41.2;
@@ -170,7 +170,7 @@ class TabHeader extends StatelessWidget {
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        SearchPill(onTap: () => context.push(Routes.search)),
+                        SearchPill(heroTag: heroTag, onTap: () => context.push(Routes.search)),
                         const Positioned(top: -3.8, left: 0, right: 0, child: _RimLight()),
                       ],
                     ),

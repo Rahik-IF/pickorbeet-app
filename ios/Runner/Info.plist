@@ -42,6 +42,10 @@
 		<true/>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>PickOrbeet uses your location to fill in a delivery address.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>PickOrbeet uses the microphone so you can search by speaking.</string>
+		<key>NSSpeechRecognitionUsageDescription</key>
+		<string>PickOrbeet turns what you say into a product search.</string>
 		<key>NSAppTransportSecurity</key>
 		<dict>
 			<key>NSAllowsLocalNetworking</key>

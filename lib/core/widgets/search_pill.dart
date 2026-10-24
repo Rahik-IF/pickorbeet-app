@@ -22,7 +22,7 @@ class SearchPill extends StatelessWidget {
   /// Home header proportions.
   const SearchPill.compact({super.key, required this.onTap, this.heroTag = 'search-field'})
       : hint = 'Search products...',
-        height = 34.2,
+        height = 36,
         radius = 11.7,
         iconLeft = 13.95,
         iconSize = 15.5,

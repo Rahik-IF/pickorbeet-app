@@ -147,7 +147,7 @@ class _Search extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SearchPill(onTap: () => context.push(Routes.search));
+    return SearchPill(heroTag: 'search-vouchers', onTap: () => context.push(Routes.search));
   }
 }
 

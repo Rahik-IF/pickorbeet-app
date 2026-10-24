@@ -19,9 +19,9 @@ class BrandLockup extends StatelessWidget {
   const BrandLockup.compact({super.key, this.onDark = true})
       : markSize = const Size(31.8, 32.7),
         markLift = 0.5,
-        wordmarkSize = 19.85,
+        wordmarkSize = 18.5,
         wordmarkDrop = 1,
-        gap = 5.5;
+        gap = 8;
 
   /// The box the mark is centred in. The official mark is narrower than the design's drawing, so
   /// centring it keeps the wordmark where the design puts it.

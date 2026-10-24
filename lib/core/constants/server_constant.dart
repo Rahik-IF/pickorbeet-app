@@ -1,11 +1,14 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
+
 /// Where the Django API lives.
 ///
-/// Pass `--dart-define=API_ORIGIN=http://192.168.0.10:8000` for a physical device or a deployed
-/// server. Without it, Android emulators use the host alias `10.0.2.2` and everything else uses
-/// `127.0.0.1`.
+/// Release builds call the live API. Debug builds use the local Django server: Android emulators
+/// use the host alias `10.0.2.2`, and everything else uses `127.0.0.1`.
+/// Pass `--dart-define=API_ORIGIN=http://192.168.0.10:8000` to point any build somewhere else.
 abstract final class ServerConstant {
+  static const liveOrigin = 'https://admin.pickorbeet.com';
   static const _originOverride = String.fromEnvironment('API_ORIGIN');
 
   static final String origin = _resolveOrigin();
@@ -17,6 +20,7 @@ abstract final class ServerConstant {
     if (value.isNotEmpty) {
       return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
     }
+    if (kReleaseMode) return liveOrigin;
     return Platform.isAndroid ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
   }
 

@@ -177,7 +177,7 @@ class _CartPageState extends ConsumerState<CartPage> {
       backgroundColor: AppPallete.background,
       body: Column(
         children: [
-          const TabHeader(),
+          const TabHeader(heroTag: 'search-cart'),
           Expanded(
             child: cart.when(
               loading: () => const Center(

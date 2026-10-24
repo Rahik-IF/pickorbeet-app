@@ -26,6 +26,7 @@ import 'package:pickorbeet/features/checkout/checkout_args.dart';
 import 'package:pickorbeet/features/checkout/view/checkout_page.dart';
 import 'package:pickorbeet/features/home/view/pages/home_page.dart';
 import 'package:pickorbeet/features/notifications/view/notifications_page.dart';
+import 'package:pickorbeet/features/search/view/pages/search_page.dart';
 import 'package:pickorbeet/features/vouchers/view/vouchers_page.dart';
 import 'package:pickorbeet/features/wishlist/view/pages/wishlist_page.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -94,7 +95,7 @@ GoRouter appRouter(Ref ref) {
       // Everything below opens over the tabs, without the bottom bar.
       GoRoute(
         path: Routes.search,
-        builder: (_, _) => const PlaceholderPage('Search'),
+        builder: (_, _) => const SearchPage(),
       ),
       GoRoute(
         path: Routes.products,
