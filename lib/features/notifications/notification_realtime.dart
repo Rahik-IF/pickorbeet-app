@@ -116,15 +116,19 @@ class NotificationLifecycle extends Notifier<void> {
     _socket = null;
     _socketConnected = false;
 
-    final token = await ref.read(apiClientProvider).ensureAccess(force: forceRefresh);
+    final token = await ref
+        .read(apiClientProvider)
+        .ensureAccess(force: forceRefresh);
     if (_stopped || generation != _generation) return;
     if (token == null) return;
 
     final channel = WebSocketChannel.connect(_socketUri(token));
     _socket = channel;
-    unawaited(channel.ready.then((_) {
-      if (!_stopped && generation == _generation) _socketConnected = true;
-    }, onError: (_) {}));
+    unawaited(
+      channel.ready.then((_) {
+        if (!_stopped && generation == _generation) _socketConnected = true;
+      }, onError: (_) {}),
+    );
     _socketSub = channel.stream.listen(
       (event) {
         _socketConnected = true;
@@ -145,7 +149,9 @@ class NotificationLifecycle extends Notifier<void> {
 
   void _scheduleRetry(int generation) {
     if (_stopped || generation != _generation) return;
-    final delay = Duration(seconds: (1 << (_generation.clamp(0, 5))).clamp(1, 30));
+    final delay = Duration(
+      seconds: (1 << (_generation.clamp(0, 5))).clamp(1, 30),
+    );
     _retry?.cancel();
     _retry = Timer(delay, () {
       if (!_stopped) unawaited(_connect(forceRefresh: false));
@@ -158,14 +164,18 @@ class NotificationLifecycle extends Notifier<void> {
     final json = asJson(decoded);
     final type = json.str('type');
     if (type == 'notification.read') {
-      ref.read(notificationInboxProvider.notifier).setUnreadCount(json.integer('unread_count'));
+      ref
+          .read(notificationInboxProvider.notifier)
+          .setUnreadCount(json.integer('unread_count'));
       return;
     }
     if (type != 'notification.created') return;
     final rowJson = json.obj('notification');
     if (rowJson == null) return;
     final row = AppNotification.fromJson(rowJson);
-    ref.read(notificationInboxProvider.notifier).upsert(row, json.integer('unread_count'));
+    ref
+        .read(notificationInboxProvider.notifier)
+        .upsert(row, json.integer('unread_count'));
     _present(row, local: false);
   }
 
@@ -201,13 +211,19 @@ class NotificationLifecycle extends Notifier<void> {
 
   Future<void> _prepareLocalNotifications() async {
     if (_localReady) return;
-    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/launcher_icon',
+    );
     const ios = DarwinInitializationSettings();
     await _local.initialize(
       const InitializationSettings(android: androidSettings, iOS: ios),
-      onDidReceiveNotificationResponse: (response) => _openPayload(response.payload),
+      onDidReceiveNotificationResponse: (response) =>
+          _openPayload(response.payload),
     );
-    final androidPlugin = _local.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _local
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await androidPlugin?.createNotificationChannel(_ordersChannel);
     await androidPlugin?.requestNotificationsPermission();
     _localReady = true;
@@ -219,7 +235,9 @@ class NotificationLifecycle extends Notifier<void> {
     if (row == null) return;
     final inbox = ref.read(notificationInboxProvider);
     final known = inbox.items.any((item) => item.id == row.id);
-    ref.read(notificationInboxProvider.notifier).upsert(row, known ? inbox.unreadCount : inbox.unreadCount + 1);
+    ref
+        .read(notificationInboxProvider.notifier)
+        .upsert(row, known ? inbox.unreadCount : inbox.unreadCount + 1);
     _present(row, local: true);
   }
 
@@ -233,6 +251,9 @@ class NotificationLifecycle extends Notifier<void> {
     if (context == null || !context.mounted) return;
     final location = GoRouter.of(context).state.uri.toString();
     final orderId = row.data['order_id'];
+    if (row.data['target'] == 'support' && location.startsWith(Routes.help)) {
+      return;
+    }
     if (orderId is String && location.contains('/orders/$orderId')) return;
     showToast(context, row.body.isEmpty ? row.title : row.body);
   }
@@ -254,7 +275,8 @@ class NotificationLifecycle extends Notifier<void> {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      payload: '${row.id}|${orderId is String ? orderId : ''}',
+      payload:
+          '${row.id}|${orderId is String ? orderId : ''}|${row.data['target'] is String ? row.data['target'] : ''}',
     );
   }
 
@@ -262,7 +284,12 @@ class NotificationLifecycle extends Notifier<void> {
     final row = _fromRemote(message);
     if (row == null) return;
     final orderId = row.data['order_id'];
-    _go(row.id, orderId is String ? orderId : null);
+    final target = row.data['target'];
+    _go(
+      row.id,
+      orderId is String ? orderId : null,
+      target is String ? target : null,
+    );
   }
 
   void _openPayload(String? payload) {
@@ -270,13 +297,20 @@ class NotificationLifecycle extends Notifier<void> {
     final parts = payload.split('|');
     final id = parts.first;
     final orderId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
-    _go(id, orderId);
+    final target = parts.length > 2 && parts[2].isNotEmpty ? parts[2] : null;
+    _go(id, orderId, target);
   }
 
-  void _go(String notificationId, String? orderId) {
-    unawaited(ref.read(notificationRepositoryProvider).markRead(notificationId));
+  void _go(String notificationId, String? orderId, String? target) {
+    unawaited(
+      ref.read(notificationRepositoryProvider).markRead(notificationId),
+    );
     final context = rootNavigatorKey.currentContext;
     if (context == null || !context.mounted) return;
+    if (target == 'support') {
+      context.push(Routes.help);
+      return;
+    }
     if (orderId != null && orderId.isNotEmpty) {
       context.push(Routes.order(orderId));
       return;
@@ -285,7 +319,8 @@ class NotificationLifecycle extends Notifier<void> {
   }
 }
 
-final notificationLifecycleProvider = NotifierProvider<NotificationLifecycle, void>(NotificationLifecycle.new);
+final notificationLifecycleProvider =
+    NotifierProvider<NotificationLifecycle, void>(NotificationLifecycle.new);
 
 AppNotification? _fromRemote(RemoteMessage message) {
   final data = message.data;
@@ -307,12 +342,15 @@ AppNotification? _fromRemote(RemoteMessage message) {
   );
 }
 
-String? _text(Object? value) => value is String && value.isNotEmpty ? value : null;
+String? _text(Object? value) =>
+    value is String && value.isNotEmpty ? value : null;
 
 Uri _socketUri(String token) {
   final origin = ServerConstant.origin;
   final ws = origin.startsWith('https://')
       ? origin.replaceFirst('https://', 'wss://')
       : origin.replaceFirst('http://', 'ws://');
-  return Uri.parse('$ws/ws/notifications/').replace(queryParameters: {'token': token});
+  return Uri.parse(
+    '$ws/ws/notifications/',
+  ).replace(queryParameters: {'token': token});
 }

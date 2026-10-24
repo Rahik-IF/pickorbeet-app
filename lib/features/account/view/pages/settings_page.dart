@@ -18,6 +18,7 @@ import 'package:pickorbeet/core/widgets/brand_lockup.dart';
 import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/core/widgets/header_background.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
+import 'package:pickorbeet/features/account/profile_photo.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Account settings, measured from the settings design at 576×1024 and scaled to the 411 dp reference.
@@ -32,6 +33,8 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
+  var _photoBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +42,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (!mounted) return;
       ref.read(sessionNotifierProvider.notifier).refreshProfile();
     });
+  }
+
+  Future<void> _changePhoto() async {
+    final user = ref.read(currentUserNotifierProvider);
+    if (user == null || _photoBusy) return;
+    final choice = await chooseProfilePhoto(context, canRemove: profileHasPhoto(user));
+    if (!mounted || choice == null) return;
+    if (choice is ProfilePhotoInvalid) {
+      showToast(context, choice.message, kind: ToastKind.error);
+      return;
+    }
+    setState(() => _photoBusy = true);
+    final error = await saveProfilePhoto(ref, choice);
+    if (!mounted) return;
+    setState(() => _photoBusy = false);
+    if (error != null) {
+      showToast(context, error, kind: ToastKind.error);
+      return;
+    }
+    showToast(
+      context,
+      choice is ProfilePhotoRemove ? 'Profile photo removed' : 'Profile photo updated',
+      kind: ToastKind.success,
+    );
   }
 
   Future<void> _chooseLanguage(AppPreferences prefs) async {
@@ -131,7 +158,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                 padding: const EdgeInsets.fromLTRB(14, 6, 14, 22),
                 children: [
-                  _ProfileBlock(tone: tone, user: user).entrance(rise: 10),
+                  _ProfileBlock(tone: tone, user: user, photoBusy: _photoBusy, onPhoto: _changePhoto).entrance(rise: 10),
                   const SizedBox(height: 18),
                   _SectionTitle(
                     tone: tone,
@@ -147,7 +174,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         icon: PhosphorIconsFill.user,
                         tile: _Tiles.personal,
                         title: 'Personal Information',
-                        subtitle: 'Name, email, phone number',
+                        subtitle: 'Name, phone, address, and photo',
                         onTap: () => context.push(Routes.profile),
                       ),
                       _Line(
@@ -321,10 +348,12 @@ class _SettingsHeader extends StatelessWidget {
 }
 
 class _ProfileBlock extends StatelessWidget {
-  const _ProfileBlock({required this.tone, required this.user});
+  const _ProfileBlock({required this.tone, required this.user, required this.photoBusy, required this.onPhoto});
 
   final _Tone tone;
   final UserModel? user;
+  final bool photoBusy;
+  final VoidCallback onPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -338,7 +367,13 @@ class _ProfileBlock extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(2, 14, 0, 2),
           child: Row(
             children: [
-              _Avatar(tone: tone, initials: user?.initials ?? ''),
+              _Avatar(
+                tone: tone,
+                initials: user?.initials ?? '',
+                imageUrl: user?.avatar,
+                busy: photoBusy,
+                onTap: user == null || photoBusy ? null : onPhoto,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: user == null
@@ -386,56 +421,46 @@ class _ProfileBlock extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.tone, required this.initials});
+  const _Avatar({
+    required this.tone,
+    required this.initials,
+    required this.imageUrl,
+    required this.busy,
+    required this.onTap,
+  });
 
   final _Tone tone;
   final String initials;
+  final String? imageUrl;
+  final bool busy;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      semanticLabel: 'Profile photo',
-      onTap: () => context.push(Routes.profile),
-      child: SizedBox(
-        width: 64,
-        height: 64,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 62,
-              height: 62,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF8EB4FF), Color(0xFF2F6BFF)],
-                ),
-                boxShadow: [BoxShadow(color: const Color(0xFF14289A).withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4))],
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                initials.isEmpty ? '' : initials,
-                style: AppTypography.titleMedium.copyWith(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-            ),
-            Positioned(
-              right: -1,
-              bottom: -1,
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2F6BFF),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: tone.page, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(PhosphorIconsFill.camera, size: 11, color: Colors.white),
-              ),
-            ),
-          ],
+    return ProfileAvatar(
+      size: 62,
+      imageUrl: imageUrl,
+      initials: initials,
+      busy: busy,
+      onTap: onTap,
+      background: Colors.transparent,
+      badgeColor: const Color(0xFF2F6BFF),
+      badgeBorder: tone.page,
+      placeholder: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF8EB4FF), Color(0xFF2F6BFF)],
+          ),
+          boxShadow: [BoxShadow(color: const Color(0xFF14289A).withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Center(
+          child: Text(
+            initials,
+            style: AppTypography.titleMedium.copyWith(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+          ),
         ),
       ),
     );

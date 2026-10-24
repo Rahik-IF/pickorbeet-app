@@ -17,6 +17,8 @@ class UserModel {
     this.address,
     this.city,
     this.postalCode,
+    this.avatar,
+    this.fromProfile = false,
     this.orderCount = 0,
     this.totalSpent = '0',
     this.dateJoined,
@@ -33,6 +35,14 @@ class UserModel {
   final String? address;
   final String? city;
   final String? postalCode;
+
+  /// Absolute or media URL. Null when the customer has no photo.
+  final String? avatar;
+
+  /// True when this object came from `/auth/profile/`, which always includes [avatar].
+  /// Login's nested user omits it, so a later login must not wipe a photo that is already loaded.
+  final bool fromProfile;
+
   final int orderCount;
   final String totalSpent;
   final DateTime? dateJoined;
@@ -66,21 +76,25 @@ class UserModel {
       address: map.strOrNull('address'),
       city: map.strOrNull('city'),
       postalCode: map.strOrNull('postal_code'),
+      avatar: map.strOrNull('avatar'),
+      fromProfile: map.containsKey('avatar'),
       orderCount: map.integer('order_count'),
       totalSpent: map.money('total_spent'),
       dateJoined: map.date('date_joined'),
     );
   }
 
-  /// Login's nested `user` omits phone and verification, so keep what the profile already had.
+  /// Login's nested `user` omits phone, address, and the photo, so keep what the profile already had.
+  /// A profile response includes `avatar` even when it is null, and that null must stick.
   UserModel mergeMissing(UserModel? previous) {
-    if (previous == null || previous.id != id) return this;
+    if (previous == null || previous.id != id || fromProfile) return this;
     return copyWith(
       phone: phone ?? previous.phone,
       isVerified: isVerified || previous.isVerified,
       address: address ?? previous.address,
       city: city ?? previous.city,
       postalCode: postalCode ?? previous.postalCode,
+      avatar: previous.avatar,
     );
   }
 
@@ -94,6 +108,7 @@ class UserModel {
     String? address,
     String? city,
     String? postalCode,
+    Object? avatar = _keep,
     int? orderCount,
     String? totalSpent,
   }) {
@@ -109,6 +124,8 @@ class UserModel {
       address: address ?? this.address,
       city: city ?? this.city,
       postalCode: postalCode ?? this.postalCode,
+      avatar: identical(avatar, _keep) ? this.avatar : avatar as String?,
+      fromProfile: fromProfile,
       orderCount: orderCount ?? this.orderCount,
       totalSpent: totalSpent ?? this.totalSpent,
       dateJoined: dateJoined,
@@ -126,9 +143,12 @@ class UserModel {
       other.address == address &&
       other.city == city &&
       other.postalCode == postalCode &&
+      other.avatar == avatar &&
       other.orderCount == orderCount &&
       other.totalSpent == totalSpent;
 
   @override
-  int get hashCode => Object.hash(id, email, fullName, phone, isVerified, address, city, postalCode, orderCount, totalSpent);
+  int get hashCode => Object.hash(id, email, fullName, phone, isVerified, address, city, postalCode, avatar, orderCount, totalSpent);
 }
+
+const _keep = Object();

@@ -44,6 +44,10 @@
 		<string>PickOrbeet uses your location to fill in a delivery address.</string>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>PickOrbeet uses the microphone so you can search by speaking.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>PickOrbeet uses the camera so you can take a profile photo.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>PickOrbeet uses your photos for your profile picture and support chat.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
 		<string>PickOrbeet turns what you say into a product search.</string>
 		<key>NSAppTransportSecurity</key>

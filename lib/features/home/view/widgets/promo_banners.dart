@@ -24,25 +24,24 @@ class PromoBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final location = WebLink.resolve(banner.link, title: banner.title.isEmpty ? null : banner.title);
+    final fillWidth = aspect == PromoBanner.wideAspect;
+    final tile = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(color: AppPallete.shadow.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BannerImage(url: banner.image, slotAspect: aspect, adoptArtwork: fillWidth),
+      ),
+    );
     return Pressable(
       pressedScale: 0.97,
       semanticLabel: banner.title.isEmpty ? 'Promotion' : banner.title,
       onTap: location == null ? null : () => context.push(location),
-      child: AspectRatio(
-        aspectRatio: aspect,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            boxShadow: [
-              BoxShadow(color: AppPallete.shadow.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2)),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            child: BannerImage(url: banner.image, slotAspect: aspect),
-          ),
-        ),
-      ),
+      child: fillWidth ? tile : AspectRatio(aspectRatio: aspect, child: tile),
     );
   }
 }

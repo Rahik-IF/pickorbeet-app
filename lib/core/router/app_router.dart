@@ -8,6 +8,7 @@ import 'package:pickorbeet/core/router/routes.dart';
 import 'package:pickorbeet/core/widgets/placeholder_page.dart';
 import 'package:pickorbeet/features/account/view/pages/account_page.dart';
 import 'package:pickorbeet/features/account/view/pages/addresses_page.dart';
+import 'package:pickorbeet/features/account/view/pages/edit_profile_page.dart';
 import 'package:pickorbeet/features/account/view/pages/order_detail_page.dart';
 import 'package:pickorbeet/features/account/view/pages/orders_page.dart';
 import 'package:pickorbeet/features/account/view/pages/settings_page.dart';
@@ -27,6 +28,7 @@ import 'package:pickorbeet/features/checkout/view/checkout_page.dart';
 import 'package:pickorbeet/features/home/view/pages/home_page.dart';
 import 'package:pickorbeet/features/notifications/view/notifications_page.dart';
 import 'package:pickorbeet/features/search/view/pages/search_page.dart';
+import 'package:pickorbeet/features/support/view/help_chat_page.dart';
 import 'package:pickorbeet/features/vouchers/view/vouchers_page.dart';
 import 'package:pickorbeet/features/wishlist/view/pages/wishlist_page.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -180,7 +182,7 @@ GoRouter appRouter(Ref ref) {
       ),
       GoRoute(
         path: Routes.profile,
-        builder: (_, _) => const PlaceholderPage('Profile'),
+        builder: (_, _) => const EditProfilePage(),
       ),
       GoRoute(
         path: Routes.addresses,
@@ -207,7 +209,7 @@ GoRouter appRouter(Ref ref) {
       ),
       GoRoute(
         path: Routes.help,
-        builder: (_, _) => const PlaceholderPage('Help'),
+        builder: (_, state) => HelpChatPage(orderNumber: state.uri.queryParameters['order'] ?? ''),
       ),
       GoRoute(path: '/settings', redirect: (_, _) => Routes.settings),
       GoRoute(

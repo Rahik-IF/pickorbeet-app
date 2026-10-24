@@ -74,6 +74,7 @@ abstract final class Routes {
   /// Locations that need a signed-in customer.
   static bool isProtected(String location) =>
       location == notifications ||
+      location == help ||
       (location != vouchers &&
           (location.startsWith(orders) || location.startsWith('$account/') || location == membership));
 

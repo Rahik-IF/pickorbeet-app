@@ -24,10 +24,10 @@ class ApiClient {
     required CookieJar cookies,
     String? baseUrl,
     this.timeout = const Duration(seconds: 15),
-  })  : _client = client,
-        _tokens = tokens,
-        _cookies = cookies,
-        _baseUrl = baseUrl ?? ServerConstant.apiBase;
+  }) : _client = client,
+       _tokens = tokens,
+       _cookies = cookies,
+       _baseUrl = baseUrl ?? ServerConstant.apiBase;
 
   final http.Client _client;
   final AuthLocalRepository _tokens;
@@ -43,18 +43,114 @@ class ApiClient {
 
   Future<_RefreshResult>? _refreshing;
 
-  Future<http.Response> get(String path, {Map<String, Object?>? query, bool authenticated = true}) =>
-      _send('GET', path, query: query, authenticated: authenticated);
+  Future<http.Response> get(
+    String path, {
+    Map<String, Object?>? query,
+    bool authenticated = true,
+  }) => _send('GET', path, query: query, authenticated: authenticated);
 
-  Future<http.Response> post(String path, {Object? body, bool authenticated = true}) =>
-      _send('POST', path, body: body, authenticated: authenticated);
+  Future<http.Response> post(
+    String path, {
+    Object? body,
+    bool authenticated = true,
+  }) => _send('POST', path, body: body, authenticated: authenticated);
 
-  Future<http.Response> patch(String path, {Object? body}) => _send('PATCH', path, body: body);
+  Future<http.Response> patch(String path, {Object? body}) =>
+      _send('PATCH', path, body: body);
 
-  Future<http.Response> put(String path, {Object? body}) => _send('PUT', path, body: body);
+  Future<http.Response> put(String path, {Object? body}) =>
+      _send('PUT', path, body: body);
 
-  Future<http.Response> delete(String path, {Object? body, bool authenticated = true}) =>
-      _send('DELETE', path, body: body, authenticated: authenticated);
+  Future<http.Response> delete(
+    String path, {
+    Object? body,
+    bool authenticated = true,
+  }) => _send('DELETE', path, body: body, authenticated: authenticated);
+
+  /// Multipart upload. [bytes] can be sent again if the access token has to be refreshed.
+  Future<http.Response> postFile(
+    String path, {
+    Map<String, String> fields = const {},
+    required String fileField,
+    required String filename,
+    required List<int> bytes,
+  }) => _upload(
+    'POST',
+    path,
+    fields: fields,
+    fileField: fileField,
+    filename: filename,
+    bytes: bytes,
+  );
+
+  /// Multipart PATCH. The profile photo is sent with the text fields in one request.
+  Future<http.Response> patchFile(
+    String path, {
+    Map<String, String> fields = const {},
+    required String fileField,
+    required String filename,
+    required List<int> bytes,
+  }) => _upload(
+    'PATCH',
+    path,
+    fields: fields,
+    fileField: fileField,
+    filename: filename,
+    bytes: bytes,
+    timeout: const Duration(seconds: 45),
+  );
+
+  Future<http.Response> _upload(
+    String method,
+    String path, {
+    required Map<String, String> fields,
+    required String fileField,
+    required String filename,
+    required List<int> bytes,
+    Duration? timeout,
+  }) async {
+    final target = uri(path);
+    final access = _tokens.getAccessToken();
+    final response = await _sendFile(
+      method,
+      target,
+      fields,
+      fileField,
+      filename,
+      bytes,
+      access,
+      timeout,
+    );
+    if (response.statusCode != HttpStatus.unauthorized || access == null) {
+      return response;
+    }
+    switch (await _refresh(access)) {
+      case _RefreshResult.refreshed:
+        return _sendFile(
+          method,
+          target,
+          fields,
+          fileField,
+          filename,
+          bytes,
+          _tokens.getAccessToken(),
+          timeout,
+        );
+      case _RefreshResult.expired:
+        return _sendFile(
+          method,
+          target,
+          fields,
+          fileField,
+          filename,
+          bytes,
+          null,
+          timeout,
+        );
+      case _RefreshResult.unavailable:
+        return response;
+    }
+  }
 
   /// Builds an API URL. Django needs the trailing slash, and a redirect would drop a POST body.
   Uri uri(String path, [Map<String, Object?>? query]) {
@@ -63,7 +159,8 @@ class ApiClient {
     final base = Uri.parse('$_baseUrl$path');
     final params = <String, String>{
       for (final entry in (query ?? const <String, Object?>{}).entries)
-        if (entry.value != null && '${entry.value}'.isNotEmpty) entry.key: '${entry.value}',
+        if (entry.value != null && '${entry.value}'.isNotEmpty)
+          entry.key: '${entry.value}',
     };
     return params.isEmpty ? base : base.replace(queryParameters: params);
   }
@@ -78,11 +175,18 @@ class ApiClient {
     final target = uri(path, query);
     final access = authenticated ? _tokens.getAccessToken() : null;
     final response = await _dispatchWithRetry(method, target, body, access);
-    if (response.statusCode != HttpStatus.unauthorized || access == null) return response;
+    if (response.statusCode != HttpStatus.unauthorized || access == null) {
+      return response;
+    }
 
     switch (await _refresh(access)) {
       case _RefreshResult.refreshed:
-        return _dispatchWithRetry(method, target, body, _tokens.getAccessToken());
+        return _dispatchWithRetry(
+          method,
+          target,
+          body,
+          _tokens.getAccessToken(),
+        );
       case _RefreshResult.expired:
         // SimpleJWT rejects a stale token even on public endpoints, so retry as a guest.
         return _dispatchWithRetry(method, target, body, null);
@@ -93,8 +197,12 @@ class ApiClient {
 
   Future<_RefreshResult> _refresh(String failedAccess) {
     final current = _tokens.getAccessToken();
-    if (current != null && current != failedAccess) return Future.value(_RefreshResult.refreshed);
-    return _refreshing ??= _performRefresh().whenComplete(() => _refreshing = null);
+    if (current != null && current != failedAccess) {
+      return Future.value(_RefreshResult.refreshed);
+    }
+    return _refreshing ??= _performRefresh().whenComplete(
+      () => _refreshing = null,
+    );
   }
 
   Future<_RefreshResult> _performRefresh() async {
@@ -103,17 +211,22 @@ class ApiClient {
       await _expireSession();
       return _RefreshResult.expired;
     }
-    final response = await _dispatch('POST', uri('/auth/token/refresh/'), {'refresh': refresh}, null);
+    final response = await _dispatch('POST', uri('/auth/token/refresh/'), {
+      'refresh': refresh,
+    }, null);
     if (response.statusCode == HttpStatus.ok) {
       final body = decodeBody(response);
       if (body is Map && body['access'] is String) {
         // Refresh tokens rotate and the old one is blacklisted, so keep the new one.
-        final rotated = body['refresh'] is String ? body['refresh'] as String : refresh;
+        final rotated = body['refresh'] is String
+            ? body['refresh'] as String
+            : refresh;
         await _tokens.saveSession(body['access'] as String, rotated);
         return _RefreshResult.refreshed;
       }
     }
-    if (response.statusCode == HttpStatus.badRequest || response.statusCode == HttpStatus.unauthorized) {
+    if (response.statusCode == HttpStatus.badRequest ||
+        response.statusCode == HttpStatus.unauthorized) {
       await _expireSession();
       return _RefreshResult.expired;
     }
@@ -143,7 +256,12 @@ class ApiClient {
     onSessionExpired?.call();
   }
 
-  Future<http.Response> _dispatchWithRetry(String method, Uri target, Object? body, String? access) async {
+  Future<http.Response> _dispatchWithRetry(
+    String method,
+    Uri target,
+    Object? body,
+    String? access,
+  ) async {
     try {
       return await _dispatch(method, target, body, access);
     } on Object catch (error) {
@@ -154,19 +272,62 @@ class ApiClient {
   }
 
   static bool _isTransient(Object error) =>
-      error is SocketException || error is http.ClientException || error is TimeoutException;
+      error is SocketException ||
+      error is http.ClientException ||
+      error is TimeoutException;
 
-  Future<http.Response> _dispatch(String method, Uri target, Object? body, String? access) async {
+  Future<http.Response> _sendFile(
+    String method,
+    Uri target,
+    Map<String, String> fields,
+    String fileField,
+    String filename,
+    List<int> bytes,
+    String? access,
+    Duration? timeout,
+  ) async {
+    final limit = timeout ?? this.timeout;
+    final request = http.MultipartRequest(method, target)
+      ..followRedirects = false
+      ..fields.addAll(fields)
+      ..files.add(
+        http.MultipartFile.fromBytes(fileField, bytes, filename: filename),
+      )
+      ..headers[HttpHeaders.acceptHeader] = 'application/json';
+    if (access != null) {
+      request.headers[HttpHeaders.authorizationHeader] = 'Bearer $access';
+    }
+    final cookies = await _cookies.loadForRequest(target);
+    if (cookies.isNotEmpty) {
+      request.headers[HttpHeaders.cookieHeader] = cookies
+          .map((cookie) => '${cookie.name}=${cookie.value}')
+          .join('; ');
+    }
+    final streamed = await _client.send(request).timeout(limit);
+    final response = await http.Response.fromStream(streamed).timeout(limit);
+    await _saveCookies(target, response);
+    return response;
+  }
+
+  Future<http.Response> _dispatch(
+    String method,
+    Uri target,
+    Object? body,
+    String? access,
+  ) async {
     final request = http.Request(method, target)
       ..followRedirects = false
       ..headers.addAll({
         HttpHeaders.acceptHeader: 'application/json',
-        if (body != null) HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
+        if (body != null)
+          HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
         if (access != null) HttpHeaders.authorizationHeader: 'Bearer $access',
       });
     final cookies = await _cookies.loadForRequest(target);
     if (cookies.isNotEmpty) {
-      request.headers[HttpHeaders.cookieHeader] = cookies.map((c) => '${c.name}=${c.value}').join('; ');
+      request.headers[HttpHeaders.cookieHeader] = cookies
+          .map((c) => '${c.name}=${c.value}')
+          .join('; ');
     }
     if (body != null) request.bodyBytes = utf8.encode(jsonEncode(body));
 
@@ -207,7 +368,9 @@ Future<Either<AppFailure, T>> guardRequest<T>(
 }) async {
   try {
     final response = await request();
-    if (!success.contains(response.statusCode)) return Left(AppFailure.fromResponse(response));
+    if (!success.contains(response.statusCode)) {
+      return Left(AppFailure.fromResponse(response));
+    }
     return Right(parse(decodeBody(response)));
   } on Object catch (error) {
     return Left(AppFailure.fromException(error));

@@ -45,6 +45,7 @@ dependencies:
   confetti: ^0.8.0
   flutter_svg: ^2.3.0
   speech_to_text: ^7.4.0
+  image_picker: ^1.2.0
 
 dev_dependencies:
   flutter_test:

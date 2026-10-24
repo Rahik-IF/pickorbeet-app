@@ -16,6 +16,7 @@ import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/core/widgets/app_header.dart';
 import 'package:pickorbeet/core/widgets/section.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
+import 'package:pickorbeet/features/account/profile_photo.dart';
 import 'package:pickorbeet/features/account/repositories/order_summary_repository.dart';
 import 'package:pickorbeet/features/auth/view/widgets/google_sign_in_button.dart';
 import 'package:pickorbeet/features/home/view/widgets/category_section_card.dart';
@@ -33,6 +34,7 @@ class AccountPage extends ConsumerStatefulWidget {
 
 class _AccountPageState extends ConsumerState<AccountPage> {
   final _scroll = ScrollController();
+  var _photoBusy = false;
 
   @override
   void dispose() {
@@ -50,6 +52,30 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         // The stats card shows the failure; the rest of the page stays.
       }
     }
+  }
+
+  Future<void> _changePhoto() async {
+    final user = ref.read(currentUserNotifierProvider);
+    if (user == null || _photoBusy) return;
+    final choice = await chooseProfilePhoto(context, canRemove: profileHasPhoto(user));
+    if (!mounted || choice == null) return;
+    if (choice is ProfilePhotoInvalid) {
+      showToast(context, choice.message, kind: ToastKind.error);
+      return;
+    }
+    setState(() => _photoBusy = true);
+    final error = await saveProfilePhoto(ref, choice);
+    if (!mounted) return;
+    setState(() => _photoBusy = false);
+    if (error != null) {
+      showToast(context, error, kind: ToastKind.error);
+      return;
+    }
+    showToast(
+      context,
+      choice is ProfilePhotoRemove ? 'Profile photo removed' : 'Profile photo updated',
+      kind: ToastKind.success,
+    );
   }
 
   Future<void> _signOut() async {
@@ -92,7 +118,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       padding: const EdgeInsets.fromLTRB(AccountPage.margin, 14, AccountPage.margin, 24),
                       children: [
-                        _ProfileCard(user: user).entrance(),
+                        _ProfileCard(user: user, photoBusy: _photoBusy, onPhoto: _changePhoto).entrance(),
                         const SizedBox(height: 12),
                         const _OrdersCard().entrance(index: 1),
                         const SizedBox(height: 12),
@@ -393,9 +419,11 @@ class _TrustLine extends StatelessWidget {
 }
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.user});
+  const _ProfileCard({required this.user, required this.photoBusy, required this.onPhoto});
 
   final UserModel? user;
+  final bool photoBusy;
+  final VoidCallback onPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -405,7 +433,13 @@ class _ProfileCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Row(
           children: [
-            const _Avatar(),
+            ProfileAvatar(
+              size: 54,
+              imageUrl: user?.avatar,
+              initials: user?.initials ?? '',
+              busy: photoBusy,
+              onTap: user == null || photoBusy ? null : onPhoto,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: user == null
@@ -441,45 +475,6 @@ class _ProfileCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 58,
-      height: 58,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: const BoxDecoration(color: Color(0xFFE7EEFB), shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: const Icon(PhosphorIconsRegular.user, size: 28, color: Color(0xFF8AA0C8)),
-          ),
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: AppPallete.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppPallete.surface, width: 1.5),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(PhosphorIconsFill.camera, size: 9, color: AppPallete.onDark),
-            ),
-          ),
-        ],
       ),
     );
   }

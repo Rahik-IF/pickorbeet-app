@@ -9,11 +9,21 @@ import 'package:pickorbeet/core/theme/app_pallete.dart';
 /// A banner that fills its slot. Banner artwork carries its own text, so an image whose shape is
 /// far from the slot's is shown whole over a blurred fill of itself instead of being cropped.
 class BannerImage extends StatefulWidget {
-  const BannerImage({super.key, required this.url, required this.slotAspect, this.semanticLabel});
+  const BannerImage({
+    super.key,
+    required this.url,
+    required this.slotAspect,
+    this.semanticLabel,
+    this.adoptArtwork = false,
+  });
 
   final String url;
   final double slotAspect;
   final String? semanticLabel;
+
+  /// Size the slot to the artwork so a wide banner fills the width instead of
+  /// sitting in a letterbox. [slotAspect] is only the placeholder until the image is known.
+  final bool adoptArtwork;
 
   /// How far an image's aspect may differ from the slot's before cropping would cut content.
   static const _tolerance = 0.08;
@@ -87,7 +97,7 @@ class _BannerImageState extends State<BannerImage> {
       child = const ColoredBox(color: AppPallete.headerMid, child: SizedBox.expand());
     } else if (aspect == null) {
       child = const ColoredBox(color: AppPallete.skeleton, child: SizedBox.expand());
-    } else if ((aspect / widget.slotAspect - 1).abs() <= BannerImage._tolerance) {
+    } else if (widget.adoptArtwork || (aspect / widget.slotAspect - 1).abs() <= BannerImage._tolerance) {
       child = Image(image: provider, fit: BoxFit.cover, width: double.infinity, height: double.infinity);
     } else {
       child = Stack(
@@ -101,13 +111,16 @@ class _BannerImageState extends State<BannerImage> {
         ],
       );
     }
+    final shown = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      child: KeyedSubtree(key: ValueKey((aspect != null, _failed)), child: child),
+    );
     return Semantics(
       image: true,
       label: widget.semanticLabel,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        child: KeyedSubtree(key: ValueKey((aspect != null, _failed)), child: child),
-      ),
+      child: widget.adoptArtwork
+          ? AspectRatio(aspectRatio: aspect ?? widget.slotAspect, child: shown)
+          : shown,
     );
   }
 }

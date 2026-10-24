@@ -122,15 +122,35 @@ class AuthRemoteRepository {
     String? address,
     String? city,
     String? postalCode,
+    List<int>? avatarBytes,
+    String? avatarFilename,
+    bool clearAvatar = false,
   }) {
+    final text = <String, Object?>{
+      'first_name': ?firstName?.trim(),
+      'last_name': ?lastName?.trim(),
+      'phone': ?phone?.trim(),
+      'address': ?address?.trim(),
+      'city': ?city?.trim(),
+      'postal_code': ?postalCode?.trim(),
+    };
+    if (avatarBytes != null) {
+      return guardRequest(
+        () => _api.patchFile(
+          '/auth/profile/',
+          fields: {for (final entry in text.entries) entry.key: '${entry.value}'},
+          fileField: 'avatar',
+          filename: avatarFilename ?? 'avatar.jpg',
+          bytes: avatarBytes,
+        ),
+        (body) => UserModel.fromMap(asJson(body)),
+        success: const {200},
+      );
+    }
     return guardRequest(
       () => _api.patch('/auth/profile/', body: {
-        'first_name': ?firstName?.trim(),
-        'last_name': ?lastName?.trim(),
-        'phone': ?phone?.trim(),
-        'address': ?address?.trim(),
-        'city': ?city?.trim(),
-        'postal_code': ?postalCode?.trim(),
+        ...text,
+        if (clearAvatar) 'clear_avatar': true,
       }),
       (body) => UserModel.fromMap(asJson(body)),
       success: const {200},
