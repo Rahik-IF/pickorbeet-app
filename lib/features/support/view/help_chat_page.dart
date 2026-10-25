@@ -164,37 +164,6 @@ class _HelpChatPageState extends ConsumerState<HelpChatPage> {
     _onDraft(next);
   }
 
-  Future<void> _call(String phone) async {
-    final number = phone.trim();
-    if (number.isEmpty) return;
-    final opened = await launchUrl(Uri(scheme: 'tel', path: number));
-    if (!opened && mounted) {
-      showToast(
-        context,
-        'Calling is not available on this device.',
-        kind: ToastKind.error,
-      );
-    }
-  }
-
-  void _videoUnavailable() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Video call'),
-        content: const Text(
-          'Video calls are not available. You can keep chatting here, or call the store.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _info(HelpProfile profile) {
     showModalBottomSheet<void>(
       context: context,
@@ -224,22 +193,6 @@ class _HelpChatPageState extends ConsumerState<HelpChatPage> {
             Text(
               'PickOrbeet Support',
               style: AppTypography.titleMedium.copyWith(fontSize: 16),
-            ),
-            ListTile(
-              leading: const Icon(
-                PhosphorIconsRegular.phone,
-                color: AppPallete.primary,
-              ),
-              title: const Text('Call'),
-              subtitle: Text(
-                profile.phone.isEmpty ? 'Not listed' : profile.phone,
-              ),
-              onTap: profile.phone.isEmpty
-                  ? null
-                  : () {
-                      Navigator.of(context).pop();
-                      unawaited(_call(profile.phone));
-                    },
             ),
             ListTile(
               leading: const Icon(
@@ -295,8 +248,6 @@ class _HelpChatPageState extends ConsumerState<HelpChatPage> {
               online: chat.agentOnline,
               onBack: () =>
                   context.canPop() ? context.pop() : context.go(Routes.account),
-              onCall: () => unawaited(_call(chat.profile.phone)),
-              onVideo: _videoUnavailable,
               onInfo: () => _info(chat.profile),
             ),
             _Topics(onSelect: _sendTopic, enabled: !chat.sending),
@@ -337,16 +288,12 @@ class _Header extends StatelessWidget {
     required this.profile,
     required this.online,
     required this.onBack,
-    required this.onCall,
-    required this.onVideo,
     required this.onInfo,
   });
 
   final HelpProfile profile;
   final bool online;
   final VoidCallback onBack;
-  final VoidCallback onCall;
-  final VoidCallback onVideo;
   final VoidCallback onInfo;
 
   @override
@@ -415,16 +362,6 @@ class _Header extends StatelessWidget {
                     ),
                 ],
               ),
-            ),
-            _HeaderIcon(
-              icon: PhosphorIconsRegular.phone,
-              label: 'Call support',
-              onPressed: onCall,
-            ),
-            _HeaderIcon(
-              icon: PhosphorIconsRegular.videoCamera,
-              label: 'Video call',
-              onPressed: onVideo,
             ),
             _HeaderIcon(
               icon: PhosphorIconsRegular.info,

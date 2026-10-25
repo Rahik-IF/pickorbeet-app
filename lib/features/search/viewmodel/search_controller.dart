@@ -6,6 +6,7 @@ import 'package:pickorbeet/core/failure/failure.dart';
 import 'package:pickorbeet/core/models/paginated.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/repositories/catalog_repository.dart';
+import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
 import 'package:pickorbeet/features/search/viewmodel/recent_searches.dart';
 
 enum SearchTab { all, products, categories, brands }
@@ -16,14 +17,61 @@ const searchSuggestionLimit = 8;
 /// Pause after the last keystroke before a catalog request.
 const searchDebounce = Duration(milliseconds: 300);
 
-/// Categories whose names contain [query]. An empty query keeps the full list.
-List<CategoryModel> matchingCategories(List<CategoryModel> categories, String query) {
-  final needle = query.trim().toLowerCase();
-  if (needle.isEmpty) return categories;
-  return [
-    for (final category in categories)
-      if (category.name.toLowerCase().contains(needle)) category,
-  ];
+/// A category row, or a subcategory row nested under [category].
+class CatalogHit {
+  const CatalogHit.category(this.category) : subcategory = null;
+
+  const CatalogHit.subcategory(this.category, this.subcategory);
+
+  final CategoryModel category;
+  final SubcategoryModel? subcategory;
+
+  String get name => subcategory?.name ?? category.name;
+}
+
+/// Categories and subcategories whose names contain [query].
+/// An empty query keeps the category list and hides subcategory rows.
+List<CatalogHit> matchingCatalog(List<CategoryModel> categories, String query) {
+  final needle = _searchPhrase(query);
+  if (needle.isEmpty) {
+    return [for (final category in categories) CatalogHit.category(category)];
+  }
+  final hits = <CatalogHit>[];
+  for (final category in categories) {
+    if (_searchPhrase(category.name).contains(needle)) {
+      hits.add(CatalogHit.category(category));
+    }
+    for (final subcategory in category.subcategories) {
+      if (_searchPhrase(subcategory.name).contains(needle)) {
+        hits.add(CatalogHit.subcategory(category, subcategory));
+      }
+    }
+  }
+  return hits;
+}
+
+/// True when [query] is a category or subcategory name, or a distinctive part of one.
+/// One- and two-letter fragments are ignored so they do not pull in a whole catalogue.
+bool queryNamesCatalog(List<CategoryModel> categories, String query) {
+  final needle = _searchPhrase(query);
+  if (needle.isEmpty) return false;
+  for (final category in categories) {
+    if (_nameHit(category.name, needle)) return true;
+    for (final subcategory in category.subcategories) {
+      if (_nameHit(subcategory.name, needle)) return true;
+    }
+  }
+  return false;
+}
+
+String _searchPhrase(String value) =>
+    value.toLowerCase().replaceAll(',', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+bool _nameHit(String name, String needle) {
+  final label = _searchPhrase(name);
+  if (label.isEmpty) return false;
+  if (label == needle) return true;
+  return needle.length >= 3 && label.contains(needle);
 }
 
 /// The catalog has no brand field. The label is the first word of the product name.
@@ -183,9 +231,15 @@ class SearchController extends AutoDisposeNotifier<SearchSnapshot> {
       ref.read(recentSearchesProvider.notifier).remember(query);
     }
     final repo = ref.read(catalogRepositoryProvider);
+    final named = !discovery && await _namesCatalog(query);
+    if (!_alive || generation != _generation) return;
     final Either<AppFailure, Paginated<ProductSummary>> result;
     try {
-      result = discovery ? await _discovery(repo) : await repo.products(ProductQuery(search: query));
+      result = discovery
+          ? await _discovery(repo)
+          : named
+              ? await _allPages(repo, query, generation)
+              : await repo.products(ProductQuery(search: query));
     } on Object catch (error) {
       if (!_alive || generation != _generation) return;
       _emit(
@@ -203,14 +257,50 @@ class SearchController extends AutoDisposeNotifier<SearchSnapshot> {
       case Left(value: final failure):
         _emit(state.copyWith(loading: false, pending: false, failure: failure, products: const []));
       case Right(value: final page):
+        final products = named ? page.results : page.results.take(searchSuggestionLimit).toList();
         _emit(
           state.copyWith(
             loading: false,
             pending: false,
             clearFailure: true,
-            products: page.results.take(searchSuggestionLimit).toList(),
+            products: products,
           ),
         );
+    }
+  }
+
+  Future<bool> _namesCatalog(String query) async {
+    try {
+      return queryNamesCatalog(await ref.read(categoriesProvider.future), query);
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Follows pages so a category name is not clipped at the suggestion limit.
+  Future<Either<AppFailure, Paginated<ProductSummary>>> _allPages(
+    CatalogRepository repo,
+    String query,
+    int generation,
+  ) async {
+    final first = await repo.products(ProductQuery(search: query));
+    switch (first) {
+      case Left():
+        return first;
+      case Right(value: var page):
+        var guard = 0;
+        while (page.nextPage != null && guard < 50) {
+          if (!_alive || generation != _generation) return Right(page);
+          final more = await repo.products(ProductQuery(search: query), page: page.nextPage!);
+          switch (more) {
+            case Left():
+              return more;
+            case Right(value: final extra):
+              page = page.append(extra);
+          }
+          guard++;
+        }
+        return Right(page);
     }
   }
 

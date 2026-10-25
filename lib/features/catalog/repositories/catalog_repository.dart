@@ -79,6 +79,33 @@ class CatalogRepository {
       );
 }
 
+const _storePhone = '+8801819217424';
+const _storeEmail = 'support@pickorbeet.com';
+const _dummyPhones = {'+880 1234-567890', '+880 1234-567891'};
+const _dummyEmails = {'contact@pickorbeet.com'};
+
+List<String> _storeContacts(
+  String primary,
+  String secondary, {
+  required String fallback,
+  required Set<String> dummies,
+}) {
+  final first = _realContact(primary, fallback: fallback, dummies: dummies);
+  final extra = secondary.trim();
+  final duplicate = extra.toLowerCase() == first.toLowerCase();
+  if (extra.isEmpty || _isDummyContact(extra, dummies) || duplicate) return [first];
+  return [first, extra];
+}
+
+String _realContact(String value, {required String fallback, required Set<String> dummies}) {
+  final text = value.trim();
+  if (text.isEmpty || _isDummyContact(text, dummies)) return fallback;
+  return text;
+}
+
+bool _isDummyContact(String value, Set<String> dummies) =>
+    dummies.contains(value) || dummies.contains(value.toLowerCase());
+
 /// Contact details and search suggestions from the store settings.
 class StoreSettings {
   const StoreSettings({
@@ -97,8 +124,18 @@ class StoreSettings {
             .where((term) => term.isNotEmpty)
             .toList(),
         address: map.str('contact_address'),
-        phones: [map.str('contact_phone_1'), map.str('contact_phone_2')].where((v) => v.isNotEmpty).toList(),
-        emails: [map.str('contact_email_1'), map.str('contact_email_2')].where((v) => v.isNotEmpty).toList(),
+        phones: _storeContacts(
+          map.str('contact_phone_1'),
+          map.str('contact_phone_2'),
+          fallback: _storePhone,
+          dummies: _dummyPhones,
+        ),
+        emails: _storeContacts(
+          map.str('contact_email_1'),
+          map.str('contact_email_2'),
+          fallback: _storeEmail,
+          dummies: _dummyEmails,
+        ),
         businessHours: map.str('business_hours'),
       );
 

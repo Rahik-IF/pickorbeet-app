@@ -274,23 +274,29 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         compact: true,
       ),
       data: (items) {
-        final matches = matchingCategories(items, query);
+        final matches = matchingCatalog(items, query);
         if (matches.isEmpty) {
           return const EmptyState(
             icon: PhosphorIconsRegular.folder,
             title: 'No matching categories',
-            message: 'Try another category name.',
+            message: 'Try another category or subcategory name.',
             compact: true,
           );
         }
         return Column(
           children: [
-            for (final category in matches)
+            for (final hit in matches)
               _GroupRow(
                 icon: PhosphorIconsRegular.folder,
-                title: category.name,
-                subtitle: Formatters.items(category.productCount),
-                onTap: () => context.push(Routes.productList(title: category.name, categorySlug: category.slug)),
+                title: hit.name,
+                subtitle: hit.subcategory == null ? Formatters.items(hit.category.productCount) : hit.category.name,
+                onTap: () => context.push(
+                  Routes.productList(
+                    title: hit.name,
+                    categorySlug: hit.category.slug,
+                    subcategorySlug: hit.subcategory?.slug,
+                  ),
+                ),
               ),
           ],
         );

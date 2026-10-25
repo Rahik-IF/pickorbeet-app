@@ -87,6 +87,9 @@ class _Catalog extends CatalogRepository {
     if (failSearch && term.isNotEmpty) return const Left(AppFailure('Could not load products.'));
     if (term == 'none') return const Right(Paginated.empty());
     if (term.isEmpty) return Right(Paginated(count: 1, results: [_featured]));
+    if (catalogResults != null && term == catalogTerm) {
+      return Right(Paginated(count: catalogResults!.length, results: catalogResults!));
+    }
     if (term == 'earbuds') return Right(Paginated(count: 1, results: [_earbuds]));
     return Right(Paginated(count: 1, results: [_power]));
   }
@@ -104,8 +107,13 @@ class _Catalog extends CatalogRepository {
     );
   }
 
+  List<CategoryModel>? categoryOverride;
+  List<ProductSummary>? catalogResults;
+  String catalogTerm = '';
+
   @override
   Future<Either<AppFailure, List<CategoryModel>>> categories() async {
+    if (categoryOverride != null) return Right(categoryOverride!);
     return const Right([
       CategoryModel(
         id: 'electronics',
@@ -230,6 +238,103 @@ void main() {
     expect(find.text('none'), findsNWidgets(2));
     expect(_field(tester), 'none');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a category name lists every product, and a normal search stays capped', (tester) async {
+    final rows = [for (var i = 0; i < 9; i++) _item(id: 'row-$i', name: 'Row $i', price: '100')];
+    final catalog = _Catalog()
+      ..catalogTerm = 'power banks'
+      ..catalogResults = rows
+      ..categoryOverride = [
+        const CategoryModel(
+          id: 'electronics',
+          name: 'Electronics',
+          slug: 'electronics',
+          description: '',
+          tagline: '',
+          isFeatured: true,
+          featuredOrder: 0,
+          displayOrder: 0,
+          subcategories: [SubcategoryModel(id: 'banks', name: 'Power Banks', slug: 'power-banks')],
+          productCount: 9,
+        ),
+      ];
+    await _open(tester, catalog);
+
+    await tester.enterText(find.byType(TextField), 'Power Banks');
+    await tester.pump(searchDebounce);
+    await _until(tester, find.text('Row 8'));
+
+    expect(find.text('Row 0'), findsOneWidget);
+    expect(find.text('Row 8'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a normal search stays capped at the suggestion limit', (tester) async {
+    final rows = [for (var i = 0; i < 9; i++) _item(id: 'cap-$i', name: 'Cap $i', price: '10')];
+    final catalog = _Catalog()
+      ..catalogTerm = 'charger'
+      ..catalogResults = rows;
+    await _open(tester, catalog);
+
+    await tester.enterText(find.byType(TextField), 'charger');
+    await tester.pump(searchDebounce);
+    await _until(tester, find.text('Cap 0'));
+
+    expect(find.text('Cap 0'), findsOneWidget);
+    expect(find.text('Cap 7'), findsOneWidget);
+    expect(find.text('Cap 8'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the categories tab includes a matching subcategory', (tester) async {
+    final catalog = _Catalog()
+      ..categoryOverride = [
+        const CategoryModel(
+          id: 'electronics',
+          name: 'Electronics',
+          slug: 'electronics',
+          description: '',
+          tagline: '',
+          isFeatured: true,
+          featuredOrder: 0,
+          displayOrder: 0,
+          subcategories: [SubcategoryModel(id: 'banks', name: 'Power Banks', slug: 'power-banks')],
+          productCount: 2,
+        ),
+      ];
+    await _open(tester, catalog);
+    await tester.tap(find.text('Categories'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Power Banks');
+    await tester.pump();
+
+    expect(find.text('Power Banks'), findsWidgets);
+    expect(find.text('Electronics'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('queryNamesCatalog matches category and subcategory names', () {
+    const categories = [
+      CategoryModel(
+        id: 'electronics',
+        name: 'Electronics',
+        slug: 'electronics',
+        description: '',
+        tagline: '',
+        isFeatured: true,
+        featuredOrder: 0,
+        displayOrder: 0,
+        subcategories: [SubcategoryModel(id: 'banks', name: 'Power Banks', slug: 'power-banks')],
+        productCount: 2,
+      ),
+    ];
+    expect(queryNamesCatalog(categories, 'Electronics'), isTrue);
+    expect(queryNamesCatalog(categories, '  power   banks '), isTrue);
+    expect(queryNamesCatalog(categories, 'bank'), isTrue);
+    expect(queryNamesCatalog(categories, 'earbuds'), isFalse);
+    expect(queryNamesCatalog(categories, 'po'), isFalse);
+    expect(matchingCatalog(categories, 'banks').map((hit) => hit.name).toList(), ['Power Banks']);
   });
 }
 
