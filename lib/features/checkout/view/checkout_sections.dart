@@ -625,9 +625,10 @@ class _CheckoutLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = item.shortDescription.trim().isNotEmpty
-        ? item.shortDescription.trim()
-        : item.variantLabel;
+    final blurb = item.shortDescription.trim();
+    final subtitle = item.options.isNotEmpty
+        ? item.variantLabel
+        : (blurb.isNotEmpty ? blurb : item.variantLabel);
     return Row(
       children: [
         SizedBox(
@@ -771,8 +772,10 @@ class PaymentMethodCard extends StatelessWidget {
             if (i > 0) const SizedBox(height: 8),
             _PaymentRow(
               method: CheckoutPayment.values[i],
-              selected: selected == CheckoutPayment.values[i],
-              enabled: enabled,
+              selected:
+                  CheckoutPayment.values[i].available &&
+                  selected == CheckoutPayment.values[i],
+              enabled: enabled && CheckoutPayment.values[i].available,
               onTap: () => onChanged(CheckoutPayment.values[i]),
             ),
           ],
@@ -836,18 +839,23 @@ class _PaymentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final duration = Motion.of(context, Motion.short);
-    return Pressable(
+    final available = method.available;
+    final row = Pressable(
       semanticLabel: selected ? '${method.label}, selected' : method.label,
       pressedScale: 0.985,
       haptic: true,
       enabled: enabled,
-      onTap: onTap,
+      onTap: available ? onTap : null,
       child: AnimatedContainer(
         duration: duration,
         curve: Motion.emphasizedDecelerate,
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         decoration: BoxDecoration(
-          color: selected ? CheckoutColors.selectedFill : AppPallete.surface,
+          color: selected
+              ? CheckoutColors.selectedFill
+              : available
+              ? AppPallete.surface
+              : const Color(0xFFF8F9FC),
           borderRadius: BorderRadius.circular(CheckoutColors.choiceRadius),
           border: Border.all(
             color: selected
@@ -858,40 +866,99 @@ class _PaymentRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CheckoutRadio(selected: selected),
-            const SizedBox(width: 10),
-            _BrandTile(method),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Opacity(
+              opacity: available ? 1 : 0.55,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    method.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.titleSmall.copyWith(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800,
-                      height: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    method.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodyLarge.copyWith(
-                      fontSize: 11.5,
-                      height: 1.2,
-                      color: CheckoutColors.body,
-                    ),
-                  ),
+                  CheckoutRadio(selected: selected),
+                  const SizedBox(width: 10),
+                  _BrandTile(method),
                 ],
               ),
             ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Opacity(
+                opacity: available ? 1 : 0.55,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      method.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.titleSmall.copyWith(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      method.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyLarge.copyWith(
+                        fontSize: 11.5,
+                        height: 1.2,
+                        color: CheckoutColors.body,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
-            _PaymentMark(method: method),
+            if (available)
+              _PaymentMark(method: method)
+            else
+              const _ComingSoonTag(),
+          ],
+        ),
+      ),
+    );
+    if (available) return row;
+    return Semantics(label: '${method.label}, coming soon', child: row);
+  }
+}
+
+class _ComingSoonTag extends StatelessWidget {
+  const _ComingSoonTag();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF6ED),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFFD4A8)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(7, 4, 8, 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 5,
+              height: 5,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFF861F),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              'Coming soon',
+              textScaler: TextScaler.noScaling,
+              style: AppTypography.label.copyWith(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+                color: const Color(0xFF9A4800),
+                height: 1,
+              ),
+            ),
           ],
         ),
       ),
@@ -907,16 +974,15 @@ class _BrandTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (method) {
-      CheckoutPayment.bkash => const _TintedMark(
-        color: _BkashBird.pink,
-        child: CustomPaint(
-          size: Size(16, 12),
-          painter: _BkashBird(color: AppPallete.onDark),
-        ),
+      CheckoutPayment.bkash => const _PaymentLogo(
+        asset: 'assets/brand/bkash.png',
+        width: 28,
+        height: 28,
       ),
-      CheckoutPayment.nagad => const CustomPaint(
-        size: Size(26, 26),
-        painter: _NagadOrbPainter(),
+      CheckoutPayment.nagad => const _PaymentLogo(
+        asset: 'assets/brand/nagad.png',
+        width: 78,
+        height: 28,
       ),
       CheckoutPayment.card => const _TintedMark(
         color: Color(0xFF3A7EF0),
@@ -967,11 +1033,7 @@ class _PaymentMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (method) {
-      CheckoutPayment.bkash => const CustomPaint(
-        size: Size(34, 18),
-        painter: _BkashBird(color: _BkashBird.pink),
-      ),
-      CheckoutPayment.nagad => const _NagadWordmark(),
+      CheckoutPayment.bkash || CheckoutPayment.nagad => const SizedBox.shrink(),
       CheckoutPayment.card => const _CardMarks(),
       CheckoutPayment.cod => const CustomPaint(
         size: Size(36, 24),
@@ -981,87 +1043,27 @@ class _PaymentMark extends StatelessWidget {
   }
 }
 
-class _BkashBird extends CustomPainter {
-  const _BkashBird({required this.color});
+class _PaymentLogo extends StatelessWidget {
+  const _PaymentLogo({
+    required this.asset,
+    required this.width,
+    required this.height,
+  });
 
-  final Color color;
-
-  static const pink = Color(0xFFE2136E);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final path = Path()
-      ..moveTo(0, h * 0.58)
-      ..cubicTo(w * 0.18, h * 0.58, w * 0.32, h * 0.08, w * 0.62, h * 0.06)
-      ..cubicTo(w * 0.82, h * 0.04, w * 0.94, h * 0.20, w, h * 0.40)
-      ..cubicTo(w * 0.78, h * 0.32, w * 0.66, h * 0.46, w * 0.74, h * 0.64)
-      ..cubicTo(w * 0.82, h * 0.86, w * 0.58, h * 0.98, w * 0.46, h * 0.70)
-      ..cubicTo(w * 0.36, h * 0.52, w * 0.20, h * 0.66, w * 0.06, h * 0.90)
-      ..cubicTo(w * 0.14, h * 0.68, w * 0.04, h * 0.64, 0, h * 0.58)
-      ..close();
-    canvas.drawPath(path, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(covariant _BkashBird oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-class _NagadWordmark extends StatelessWidget {
-  const _NagadWordmark();
+  final String asset;
+  final double width;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CustomPaint(size: Size(18, 18), painter: _NagadOrbPainter()),
-        SizedBox(width: 4),
-        Image(
-          image: AssetImage('assets/brand/nagad_word.png'),
-          height: 13,
-          fit: BoxFit.contain,
-          semanticLabel: 'নগদ',
-        ),
-      ],
+    return Image.asset(
+      asset,
+      width: width,
+      height: height,
+      fit: BoxFit.contain,
+      excludeFromSemantics: true,
     );
   }
-}
-
-class _NagadOrbPainter extends CustomPainter {
-  const _NagadOrbPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bounds = Offset.zero & size;
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    canvas.saveLayer(bounds, Paint());
-    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFFFF6A00));
-    canvas.drawCircle(
-      center.translate(radius * 0.34, -radius * 0.06),
-      radius * 0.68,
-      Paint()
-        ..blendMode = BlendMode.dstOut
-        ..color = const Color(0xFFFFFFFF),
-    );
-    canvas.restore();
-    canvas.drawCircle(
-      center.translate(radius * 0.02, radius * 0.08),
-      radius * 0.34,
-      Paint()..color = const Color(0xFFFF6A00),
-    );
-    canvas.drawCircle(
-      center.translate(-radius * 0.08, radius * 0.28),
-      radius * 0.16,
-      Paint()..color = const Color(0xFFE23B2F),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _NagadOrbPainter oldDelegate) => false;
 }
 
 class _CardMarks extends StatelessWidget {

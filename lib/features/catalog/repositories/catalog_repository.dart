@@ -73,6 +73,19 @@ class CatalogRepository {
         (body) => ProductDetail.fromMap(asJson(body)),
       );
 
+  /// Creates the customer's review, or replaces the one they already wrote.
+  Future<Either<AppFailure, bool>> saveReview(
+    String slug, {
+    required int rating,
+    required String comment,
+  }) => guardRequest(
+        () => _api.post(
+          '/products/${Uri.encodeComponent(slug)}/reviews/',
+          body: {'rating': rating, 'comment': comment},
+        ),
+        (_) => true,
+      );
+
   Future<Either<AppFailure, StoreSettings>> storeSettings() => guardRequest(
         () => _api.get('/products/settings/public/', authenticated: false),
         (body) => StoreSettings.fromMap(asJson(body)),

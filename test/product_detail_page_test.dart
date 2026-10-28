@@ -7,7 +7,6 @@ import 'package:pickorbeet/core/failure/failure.dart';
 import 'package:pickorbeet/core/providers/cart_notifier.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
 import 'package:pickorbeet/core/theme/theme.dart';
-import 'package:pickorbeet/core/widgets/app_button.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/view/pages/product_detail_page.dart';
@@ -34,6 +33,10 @@ void main() {
       'is_low_stock': true,
       'is_out_of_stock': false,
       'is_featured': false,
+      'rating_average': 4.7,
+      'review_count': 328,
+      'is_official': true,
+      'warranty_period': '1 year',
       'size': 'Adjustable',
       'material': 'Aluminium',
       'category': {'id': 'c', 'name': 'Watches', 'slug': 'watches'},
@@ -52,6 +55,15 @@ void main() {
           'is_primary': true,
         },
       ],
+      'option_groups': [
+        {
+          'name': 'Storage',
+          'kind': 'text',
+          'values': [
+            {'label': '128GB'},
+          ],
+        },
+      ],
       'variants': [
         {
           'id': 'v1',
@@ -67,6 +79,12 @@ void main() {
     });
 
     expect(detail.summary.name, 'Haylou RS4');
+    expect(detail.summary.rating, 4.7);
+    expect(detail.summary.reviewCount, 328);
+    expect(detail.optionGroups.single.name, 'Storage');
+    expect(detail.optionGroups.single.values.single.label, '128GB');
+    expect(detail.summary.isOfficial, isTrue);
+    expect(detail.summary.warrantyPeriod, '1 year');
     expect(detail.summary.categoryName, 'Watches');
     expect(detail.summary.subcategoryName, 'Smart');
     expect(detail.summary.isLowStock, isTrue);
@@ -132,35 +150,68 @@ void main() {
 
     expect(find.text('Product'), findsNothing);
     expect(find.text('Haylou RS4 Smartwatch'), findsOneWidget);
-    expect(find.text('Watches · Smart'), findsOneWidget);
+    expect(find.text('Official'), findsNothing);
+    expect(find.text('Warranty'), findsNothing);
     expect(find.text('Heart rate and sleep tracking'), findsOneWidget);
     expect(find.text('A light smartwatch for daily wear.'), findsOneWidget);
     expect(find.text('Aluminium'), findsOneWidget);
     expect(find.text('HY-RS4'), findsOneWidget);
-    expect(find.text('৳ 1,890'), findsOneWidget);
+    expect(find.text('৳1,890'), findsOneWidget);
     expect(find.text('In stock'), findsOneWidget);
-    expect(find.text('Select a size'), findsOneWidget);
-    expect(find.text('Black'), findsOneWidget);
+    expect(find.textContaining('Color:'), findsOneWidget);
+    expect(find.textContaining('Black'), findsWidgets);
     expect(find.text('XL'), findsNothing);
     expect(find.text('You may also like'), findsOneWidget);
     expect(find.text('Baseus Cable'), findsOneWidget);
-    expect(find.text('Fast delivery'), findsOneWidget);
+    expect(find.text('100% Original'), findsOneWidget);
+    expect(find.text('Trusted Quality'), findsOneWidget);
+    expect(find.text('Secure Payment'), findsOneWidget);
+    expect(find.text('Easy Returns'), findsOneWidget);
+    expect(find.textContaining('Product Code:'), findsOneWidget);
+    expect(find.text('Write a review'), findsOneWidget);
+    expect(find.textContaining('You save'), findsOneWidget);
+    expect(find.text('Ready to ship'), findsOneWidget);
+    expect(find.text('Check delivery availability'), findsOneWidget);
+    expect(find.text('Cash on Delivery'), findsOneWidget);
+    expect(find.text('Add to Cart'), findsOneWidget);
+    expect(find.text('Buy Now'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Check'));
+    await tester.pump();
+    expect(find.text('Enter an area or postal code'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Mirpur');
+    await tester.tap(find.text('Check'));
+    await tester.pump();
+    expect(find.textContaining('Inside Dhaka'), findsOneWidget);
+    expect(find.textContaining('৳60'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Sylhet');
+    await tester.tap(find.text('Check'));
+    await tester.pump();
+    expect(find.textContaining('Outside Dhaka'), findsOneWidget);
+    expect(find.textContaining('৳120'), findsOneWidget);
+
+    await tester.tap(find.text('Add to Cart'));
+    await tester.pump();
+    expect(find.text('Choose a size'), findsOneWidget);
+    expect(lastAdded, isNull);
 
     await tester.tap(find.text('S'));
     await tester.pump();
-    expect(find.widgetWithText(AppButton, 'Out of stock'), findsOneWidget);
+    expect(find.text('Out of stock'), findsWidgets);
     expect(lastAdded, isNull);
 
     await tester.tap(find.text('M'));
     await tester.pump();
-    expect(find.text('Add to cart'), findsOneWidget);
+    expect(find.text('Add to Cart'), findsOneWidget);
     expect(find.text('Only 4 left'), findsOneWidget);
-    expect(find.text('৳ 1,990'), findsOneWidget);
+    expect(find.text('৳1,990'), findsOneWidget);
 
     await tester.tap(find.byIcon(PhosphorIconsBold.plus));
     await tester.pump();
-    await tester.tap(find.text('Add to cart'));
+    await tester.tap(find.text('Add to Cart'));
     await tester.pump();
     await tester.pump();
 
@@ -176,14 +227,88 @@ void main() {
 
     expect(find.text('Haylou RS4 Smartwatch'), findsOneWidget);
     expect(find.text('Out of stock'), findsWidgets);
-    final button = tester.widget<AppButton>(
-      find.widgetWithText(AppButton, 'Out of stock'),
-    );
-    expect(button.onPressed, isNull);
 
-    await tester.tap(find.widgetWithText(AppButton, 'Out of stock'));
+    await tester.tap(find.text('Out of stock').first);
     await tester.pump();
     expect(lastAdded, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('official product shows the badge and warranty period', (tester) async {
+    await _show(
+      tester,
+      detail: _detail(official: true, warranty: '1 year'),
+    );
+
+    expect(find.text('Official'), findsOneWidget);
+    expect(find.text('Warranty'), findsOneWidget);
+    expect(find.text('1 year'), findsOneWidget);
+    expect(
+      find.textContaining('Covered for 1 year from the day the order is delivered'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('custom options show storage and the saved swatch color', (tester) async {
+    await _show(
+      tester,
+      detail: const ProductDetail(
+        summary: ProductSummary(
+          id: 'p3',
+          name: 'Oraimo Necklace Lite',
+          slug: 'oraimo-necklace',
+          shortDescription: 'Neckband',
+          sku: 'ORA-OEB-311',
+          price: '1080.00',
+          discountPercentage: 0,
+          stockQuantity: 4,
+          isOutOfStock: false,
+          isFeatured: false,
+          categoryName: 'Electronics',
+          variants: [
+            ProductVariant(
+              id: 'v-neck',
+              price: '1080.00',
+              stockQuantity: 4,
+              isActive: true,
+              options: [
+                VariantChoice(name: 'Storage', label: '128GB'),
+                VariantChoice(name: 'Color', kind: 'swatch', label: 'Midnight', colorHex: '#0B1F3A'),
+              ],
+            ),
+          ],
+        ),
+        description: 'A neckband.',
+        images: [],
+        categorySlug: 'electronics',
+        optionGroups: [
+          OptionGroup(
+            name: 'Storage',
+            kind: 'text',
+            values: [VariantChoice(name: 'Storage', label: '128GB')],
+          ),
+          OptionGroup(
+            name: 'Color',
+            kind: 'swatch',
+            values: [VariantChoice(name: 'Color', kind: 'swatch', label: 'Midnight', colorHex: '#0B1F3A')],
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('128GB'), findsOneWidget);
+    expect(find.textContaining('Storage:'), findsOneWidget);
+    expect(find.textContaining('Midnight'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is DecoratedBox &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration as BoxDecoration).color == const Color(0xFF0B1F3A),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }
@@ -191,6 +316,8 @@ void main() {
 ProductDetail _detail({
   bool soldOut = false,
   List<ProductVariant> variants = const [],
+  bool official = false,
+  String warranty = '',
 }) {
   return ProductDetail(
     summary: ProductSummary(
@@ -205,6 +332,8 @@ ProductDetail _detail({
       stockQuantity: soldOut ? 0 : 12,
       isOutOfStock: soldOut,
       isFeatured: false,
+      isOfficial: official,
+      warrantyPeriod: warranty,
       categoryName: 'Watches',
       subcategoryName: 'Smart',
       variants: variants,

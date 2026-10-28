@@ -14,6 +14,9 @@ enum CheckoutPayment {
   final String subtitle;
 
   bool get online => this != CheckoutPayment.cod;
+
+  /// bKash, Nagad, and cards are shown but not payable yet.
+  bool get available => this == CheckoutPayment.cod;
 }
 
 /// The lines and voucher carried from the cart into checkout.

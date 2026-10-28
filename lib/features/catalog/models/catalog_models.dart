@@ -110,6 +110,47 @@ class CategoryModel {
 }
 
 @immutable
+class VariantChoice {
+  const VariantChoice({
+    required this.name,
+    required this.label,
+    this.kind = 'text',
+    this.colorHex = '',
+  });
+
+  factory VariantChoice.fromMap(Json map) => VariantChoice(
+    name: map.str('name'),
+    label: map.str('label'),
+    kind: map.str('kind', 'text'),
+    colorHex: map.str('color_hex'),
+  );
+
+  final String name;
+  final String label;
+  final String kind;
+  final String colorHex;
+}
+
+@immutable
+class OptionGroup {
+  const OptionGroup({
+    required this.name,
+    required this.kind,
+    required this.values,
+  });
+
+  factory OptionGroup.fromMap(Json map) => OptionGroup(
+    name: map.str('name'),
+    kind: map.str('kind', 'text'),
+    values: map.listOf('values', VariantChoice.fromMap),
+  );
+
+  final String name;
+  final String kind;
+  final List<VariantChoice> values;
+}
+
+@immutable
 class ProductVariant {
   const ProductVariant({
     required this.id,
@@ -119,6 +160,7 @@ class ProductVariant {
     this.lowStockThreshold = 10,
     this.size,
     this.color,
+    this.options = const [],
   });
 
   factory ProductVariant.fromMap(Json map) => ProductVariant(
@@ -129,6 +171,7 @@ class ProductVariant {
     stockQuantity: map.integer('stock_quantity'),
     lowStockThreshold: map.integer('low_stock_threshold', 10),
     isActive: map.boolean('is_active', true),
+    options: map.listOf('options', VariantChoice.fromMap),
   );
 
   final String id;
@@ -138,17 +181,22 @@ class ProductVariant {
   final int stockQuantity;
   final int lowStockThreshold;
   final bool isActive;
+  final List<VariantChoice> options;
 
   bool get inStock => isActive && stockQuantity > 0;
 
   bool get isLowStock => inStock && stockQuantity <= lowStockThreshold;
 
-  String get label =>
-      [size, color].whereType<String>().where((v) => v.isNotEmpty).join(' / ');
+  String get label {
+    if (options.isNotEmpty) {
+      return options.map((option) => option.label).where((label) => label.isNotEmpty).join(' / ');
+    }
+    return [size, color].whereType<String>().where((v) => v.isNotEmpty).join(' / ');
+  }
 }
 
 double? _readRating(Json map) {
-  for (final key in const ['rating', 'average_rating', 'avg_rating']) {
+  for (final key in const ['rating_average', 'rating', 'average_rating', 'avg_rating']) {
     final value = map[key];
     final double? rating;
     if (value is num) {
@@ -201,6 +249,8 @@ class ProductSummary {
     this.subcategoryName,
     this.rating,
     this.reviewCount,
+    this.isOfficial = false,
+    this.warrantyPeriod = '',
   });
 
   factory ProductSummary.fromMap(Json map) => ProductSummary(
@@ -222,6 +272,8 @@ class ProductSummary {
     variants: map.listOf('variants', ProductVariant.fromMap),
     rating: _readRating(map),
     reviewCount: _readReviewCount(map),
+    isOfficial: map.boolean('is_official'),
+    warrantyPeriod: map.str('warranty_period'),
   );
 
   final String id;
@@ -246,6 +298,12 @@ class ProductSummary {
 
   /// Number of reviews behind [rating]. Absent when the catalog has no count.
   final int? reviewCount;
+
+  /// Store-marked authentic product. Draws the Official badge on the photo.
+  final bool isOfficial;
+
+  /// Warranty length such as "1 year". Empty when the product has no warranty.
+  final String warrantyPeriod;
 
   bool get hasDiscount =>
       comparePrice != null &&
@@ -294,6 +352,7 @@ class ProductDetail {
     this.size,
     this.color,
     this.material,
+    this.optionGroups = const [],
   });
 
   factory ProductDetail.fromMap(Json map) {
@@ -314,6 +373,7 @@ class ProductDetail {
       size: map.strOrNull('size'),
       color: map.strOrNull('color'),
       material: map.strOrNull('material'),
+      optionGroups: map.listOf('option_groups', OptionGroup.fromMap),
     );
   }
 
@@ -325,6 +385,7 @@ class ProductDetail {
   final String? size;
   final String? color;
   final String? material;
+  final List<OptionGroup> optionGroups;
 
   /// Description with HTML removed, keeping paragraph and list breaks.
   String get plainDescription => _plainProductText(description);

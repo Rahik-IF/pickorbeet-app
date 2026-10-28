@@ -24,10 +24,18 @@ class OrderLine {
   final String totalPrice;
 
   factory OrderLine.fromMap(Json map) {
+    final chosen = [
+      for (final option in map.listOf('options', (json) => json))
+        option.str('label').trim(),
+    ].where((label) => label.isNotEmpty);
     final parts = <String>[
       if (map.str('product_sku').trim().isNotEmpty) map.str('product_sku').trim(),
-      if (map.str('color').trim().isNotEmpty) map.str('color').trim(),
-      if (map.str('size').trim().isNotEmpty) map.str('size').trim(),
+      if (chosen.isNotEmpty)
+        ...chosen
+      else ...[
+        if (map.str('color').trim().isNotEmpty) map.str('color').trim(),
+        if (map.str('size').trim().isNotEmpty) map.str('size').trim(),
+      ],
     ];
     return OrderLine(
       name: map.str('product_name', 'Item'),

@@ -202,7 +202,11 @@ void main() {
         context,
       );
       await precacheImage(
-        const AssetImage('assets/brand/nagad_word.png'),
+        const AssetImage('assets/brand/bkash.png'),
+        context,
+      );
+      await precacheImage(
+        const AssetImage('assets/brand/nagad.png'),
         context,
       );
     });
@@ -246,6 +250,7 @@ void main() {
     expect(find.text('Visa, MasterCard, AMEX'), findsOneWidget);
     expect(find.text('Cash on Delivery'), findsOneWidget);
     expect(find.text('Pay when you receive'), findsOneWidget);
+    expect(find.text('Coming soon'), findsNWidgets(3));
     expect(find.text('Order Summary'), findsOneWidget);
     expect(find.text('Items (1)'), findsOneWidget);
     expect(find.text('Discount'), findsOneWidget);
@@ -270,7 +275,8 @@ void main() {
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is Pressable && widget.semanticLabel == 'bKash, selected',
+            widget is Pressable &&
+            widget.semanticLabel == 'Cash on Delivery, selected',
       ),
       findsOneWidget,
     );
@@ -289,19 +295,8 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Nagad'));
+    await tester.tap(find.text('Nagad'), warnIfMissed: false);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Pressable && widget.semanticLabel == 'Nagad, selected',
-      ),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-
-    await tester.tap(find.text('Cash on Delivery'));
     await tester.pump(const Duration(milliseconds: 250));
     expect(
       find.byWidgetPredicate(

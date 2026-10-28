@@ -47,7 +47,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   final _postal = TextEditingController();
 
   String? _selectedId;
-  CheckoutPayment _payment = CheckoutPayment.bkash;
+  CheckoutPayment _payment = CheckoutPayment.cod;
   String? _coupon;
   String _discount = '0';
   String? _pricedFor;
@@ -258,7 +258,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   Future<void> _submit() async {
-    if (_placing || _placed) return;
+    if (_placing || _placed || !_payment.available) return;
     final cart = ref.read(cartNotifierProvider).valueOrNull;
     if (cart == null) return;
     final lines = _linesOf(cart);
@@ -474,7 +474,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           PaymentMethodCard(
             selected: _payment,
             enabled: !_placing && !_placed,
-            onChanged: (method) => setState(() => _payment = method),
+            onChanged: (method) {
+              if (!method.available) return;
+              setState(() => _payment = method);
+            },
           ).entrance(index: 3),
           const SizedBox(height: 12),
           OrderSummaryCard(

@@ -4,6 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:pickorbeet/core/network/json.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 
+@immutable
+class CartOption {
+  const CartOption({required this.name, required this.label});
+
+  factory CartOption.fromMap(Json map) => CartOption(
+    name: map.str('name'),
+    label: map.str('label'),
+  );
+
+  final String name;
+  final String label;
+}
+
 /// One line in `GET /orders/cart/`.
 @immutable
 class CartItemModel {
@@ -24,6 +37,7 @@ class CartItemModel {
     this.isOutOfStock = false,
     this.size,
     this.color,
+    this.options = const [],
   });
 
   final String id;
@@ -42,14 +56,20 @@ class CartItemModel {
   final bool isOutOfStock;
   final String? size;
   final String? color;
+  final List<CartOption> options;
 
   bool get hasDiscount => discountPercentage > 0 && comparePrice != null;
 
   /// Most a customer can add: the stock on hand, or one when stock is unknown.
   int get maxQuantity => stockQuantity > 0 ? stockQuantity : quantity;
 
-  /// `Black · M`
-  String get variantLabel => [color, size].whereType<String>().where((v) => v.trim().isNotEmpty).join(' · ');
+  /// `Midnight · 128GB`, or the older color and size pair.
+  String get variantLabel {
+    if (options.isNotEmpty) {
+      return options.map((option) => option.label.trim()).where((label) => label.isNotEmpty).join(' · ');
+    }
+    return [color, size].whereType<String>().where((v) => v.trim().isNotEmpty).join(' · ');
+  }
 
   factory CartItemModel.fromMap(Json map) => CartItemModel(
         id: map.str('id'),
@@ -68,6 +88,7 @@ class CartItemModel {
         isOutOfStock: map.boolean('is_out_of_stock'),
         size: map.strOrNull('size'),
         color: map.strOrNull('color'),
+        options: map.listOf('options', CartOption.fromMap),
       );
 
   CartItemModel withQuantity(int value) {
@@ -89,6 +110,7 @@ class CartItemModel {
       isOutOfStock: isOutOfStock,
       size: size,
       color: color,
+      options: options,
     );
   }
 

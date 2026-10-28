@@ -67,6 +67,7 @@ class OrderPreview {
     this.size,
     this.color,
     this.comparePrice,
+    this.options = const [],
   });
 
   final String? productId;
@@ -77,6 +78,7 @@ class OrderPreview {
   final String? image;
   final String? size;
   final String? color;
+  final List<({String name, String label})> options;
   final int quantity;
   final String unitPrice;
   final String? comparePrice;
@@ -87,12 +89,15 @@ class OrderPreview {
     return Formatters.decimal(compare) > Formatters.decimal(unitPrice);
   }
 
-  /// `OEB-311 | Black | M`
+  /// `OEB-311 | Midnight | 128GB`
   String get detailLine {
+    final chosen = options.map((option) => option.label.trim()).where((label) => label.isNotEmpty);
     final parts = <String>[
       if (sku.trim().isNotEmpty) sku.trim(),
-      if ((color ?? '').trim().isNotEmpty) color!.trim(),
-      if ((size ?? '').trim().isNotEmpty) size!.trim(),
+      if (chosen.isNotEmpty) ...chosen else ...[
+        if ((color ?? '').trim().isNotEmpty) color!.trim(),
+        if ((size ?? '').trim().isNotEmpty) size!.trim(),
+      ],
     ];
     return parts.join(' | ');
   }
@@ -106,6 +111,10 @@ class OrderPreview {
     image: map.strOrNull('product_image'),
     size: map.strOrNull('size'),
     color: map.strOrNull('color'),
+    options: [
+      for (final option in map.listOf('options', (json) => json))
+        (name: option.str('name'), label: option.str('label')),
+    ],
     quantity: map.integer('quantity', 1),
     unitPrice: map.money('unit_price'),
     comparePrice: map.moneyOrNull('compare_price'),

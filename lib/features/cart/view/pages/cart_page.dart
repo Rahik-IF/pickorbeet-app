@@ -376,9 +376,10 @@ class _CartLine extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final saved = ref.watch(isWishlistedProvider(item.productId));
-    final subtitle = item.shortDescription.trim().isNotEmpty
-        ? item.shortDescription.trim()
-        : item.variantLabel;
+    final blurb = item.shortDescription.trim();
+    final subtitle = item.options.isNotEmpty
+        ? item.variantLabel
+        : (blurb.isNotEmpty ? blurb : item.variantLabel);
     return Dismissible(
       key: ValueKey(item.id),
       direction: DismissDirection.endToStart,
