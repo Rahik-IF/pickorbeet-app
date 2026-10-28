@@ -6,6 +6,7 @@ import 'package:pickorbeet/core/network/api_client.dart';
 import 'package:pickorbeet/core/network/json.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
+import 'package:pickorbeet/features/catalog/models/official_badge.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'catalog_repository.g.dart';
@@ -127,6 +128,7 @@ class StoreSettings {
     required this.phones,
     required this.emails,
     required this.businessHours,
+    this.officialBadge = OfficialBadgeStyle.standard,
   });
 
   factory StoreSettings.fromMap(Json map) => StoreSettings(
@@ -150,6 +152,11 @@ class StoreSettings {
           dummies: _dummyEmails,
         ),
         businessHours: map.str('business_hours'),
+        officialBadge: OfficialBadgeStyle.parse(
+          size: map.str('official_badge_size'),
+          color: map.str('official_badge_color'),
+          position: map.str('official_badge_position'),
+        ),
       );
 
   final List<String> popularSearches;
@@ -157,4 +164,5 @@ class StoreSettings {
   final List<String> phones;
   final List<String> emails;
   final String businessHours;
+  final OfficialBadgeStyle officialBadge;
 }

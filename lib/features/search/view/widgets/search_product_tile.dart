@@ -51,7 +51,18 @@ class SearchProductTile extends ConsumerWidget {
                   child: SizedBox(
                     width: 72,
                     height: 72,
-                    child: AppNetworkImage(url: product.primaryImage),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(child: AppNetworkImage(url: product.primaryImage)),
+                        if (product.isOfficial)
+                          OfficialMark(
+                            style: officialBadgeStyleOf(ref),
+                            inset: 3,
+                            scale: officialBadgeStyleOf(ref).scaleFor(0.62),
+                            maxWidth: 66,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),

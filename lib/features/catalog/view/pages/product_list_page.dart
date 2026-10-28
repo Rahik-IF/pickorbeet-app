@@ -615,10 +615,18 @@ class _CatalogCard extends ConsumerWidget {
                       background: const Color(0xFFF7F9FC),
                     ),
                   ),
+                  if (product.isOfficial)
+                    OfficialMark(
+                      style: officialBadgeStyleOf(ref),
+                      inset: 8,
+                      scale: officialBadgeStyleOf(ref).scaleFor(0.86),
+                    ),
                   if (discount > 0)
                     Positioned(
                       left: 8,
-                      top: 8,
+                      top: product.isOfficial && officialBadgeStyleOf(ref).position == 'top-left'
+                          ? officialBadgeStyleOf(ref).dropFor(40)
+                          : 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                         decoration: BoxDecoration(color: AppPallete.accent, borderRadius: BorderRadius.circular(8)),
@@ -631,7 +639,9 @@ class _CatalogCard extends ConsumerWidget {
                     ),
                   Positioned(
                     right: 8,
-                    top: 8,
+                    top: product.isOfficial && officialBadgeStyleOf(ref).position == 'top-right'
+                        ? officialBadgeStyleOf(ref).dropFor(42)
+                        : 8,
                     child: Pressable(
                       semanticLabel: saved ? 'Remove from wishlist' : 'Save to wishlist',
                       onTap: () {

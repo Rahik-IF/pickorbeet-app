@@ -417,6 +417,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     if (urls.isNotEmpty && _image >= urls.length) _image = urls.length - 1;
     final photos = _photos(urls);
     final percent = _discountPercent(detail.summary.price, detail.summary.comparePrice);
+    final badge = officialBadgeStyleOf(ref);
     final many = urls.length > 1;
     return Column(
       children: [
@@ -442,10 +443,10 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                         child: detail.summary.isOutOfStock ? Opacity(opacity: 0.55, child: photos) : photos,
                       ),
                       if (detail.summary.isOfficial)
-                        const Positioned(top: 10, left: 10, child: _OfficialBadge()),
+                        OfficialMark(style: badge, inset: 10, scale: badge.scaleFor(1)),
                       if (percent > 0)
                         Positioned(
-                          top: detail.summary.isOfficial ? 46 : 10,
+                          top: detail.summary.isOfficial && badge.position == 'top-left' ? badge.dropFor(46) : 10,
                           left: 10,
                           child: DecoratedBox(
                             decoration: BoxDecoration(
@@ -467,7 +468,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                           ),
                         ),
                       Positioned(
-                        top: 6,
+                        top: detail.summary.isOfficial && badge.position == 'top-right' ? badge.dropFor(48) : 6,
                         right: 6,
                         child: WishlistHeart(product: detail.summary, diameter: 36, iconSize: 18, shadow: true),
                       ),
@@ -902,49 +903,6 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
             for (final row in specs) _SpecRow(label: row.$1, value: row.$2),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _OfficialBadge extends StatelessWidget {
-  const _OfficialBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xF5FFFFFF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFD6E4FF)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x29172033), blurRadius: 12, offset: Offset(0, 4)),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 18,
-              height: 18,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(color: _DetailPalette.blue, shape: BoxShape.circle),
-              child: const Icon(PhosphorIconsBold.check, size: 11, color: Colors.white),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Official',
-              style: AppTypography.bodyLarge.copyWith(
-                fontSize: 12,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1746B0),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

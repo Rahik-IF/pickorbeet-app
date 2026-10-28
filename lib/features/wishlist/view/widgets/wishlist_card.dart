@@ -19,6 +19,7 @@ import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
+import 'package:pickorbeet/features/catalog/models/official_badge.dart';
 import 'package:pickorbeet/features/catalog/view/widgets/product_card.dart';
 
 const _ink = Color(0xFF141B3F);
@@ -270,6 +271,7 @@ class _WishlistCardState extends ConsumerState<WishlistCard> with TickerProvider
             percent: percent,
             animate: widget.animateIn,
             onOpen: _details,
+            badge: officialBadgeStyleOf(ref),
           ),
           details: Pressable(
             pressedScale: 0.985,
@@ -361,12 +363,19 @@ class _WishlistCardState extends ConsumerState<WishlistCard> with TickerProvider
 }
 
 class _Photo extends StatelessWidget {
-  const _Photo({required this.product, required this.percent, required this.animate, required this.onOpen});
+  const _Photo({
+    required this.product,
+    required this.percent,
+    required this.animate,
+    required this.onOpen,
+    required this.badge,
+  });
 
   final ProductSummary product;
   final int percent;
   final bool animate;
   final VoidCallback onOpen;
+  final OfficialBadgeStyle badge;
 
   @override
   Widget build(BuildContext context) {
@@ -387,7 +396,14 @@ class _Photo extends StatelessWidget {
               ),
             ),
           ),
-          if (percent > 0) Positioned(left: 6, top: 6, child: _Badge(percent: percent, animate: animate)),
+          if (product.isOfficial)
+            OfficialMark(style: badge, inset: 6, scale: badge.scaleFor(0.7), maxWidth: 120),
+          if (percent > 0)
+            Positioned(
+              left: 6,
+              top: product.isOfficial && badge.position == 'top-left' ? badge.dropFor(30) : 6,
+              child: _Badge(percent: percent, animate: animate),
+            ),
         ],
       ),
     );

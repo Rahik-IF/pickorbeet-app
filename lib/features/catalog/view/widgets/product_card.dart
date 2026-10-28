@@ -19,6 +19,8 @@ import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
+import 'package:pickorbeet/features/catalog/models/official_badge.dart';
+import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
 
 /// Adds one unit to the cart, or opens the product when a size or colour must be picked first.
 Future<bool> quickAddToCart(BuildContext context, WidgetRef ref, ProductSummary product) async {
@@ -57,6 +59,11 @@ void toggleWishlist(BuildContext context, WidgetRef ref, ProductSummary product)
   }
 }
 
+/// The store's Official badge style, or the default blue top-left mark while settings load.
+OfficialBadgeStyle officialBadgeStyleOf(WidgetRef ref) {
+  return ref.watch(storeSettingsProvider).asData?.value.officialBadge ?? OfficialBadgeStyle.standard;
+}
+
 /// Hero tag for a product image, scoped so two rails showing one product don't collide.
 String productHeroTag(String scope, String productId) => 'product-image-$scope-$productId';
 
@@ -82,10 +89,11 @@ class ProductCard extends ConsumerWidget {
     final s = width / designWidth;
     final soldOut = product.isOutOfStock;
     final heroTag = productHeroTag(heroScope, product.id);
+    final badge = officialBadgeStyleOf(ref);
 
     return Pressable(
       pressedScale: 0.97,
-      semanticLabel: '${product.name}, ${Formatters.money(product.price)}${soldOut ? ', out of stock' : ''}',
+      semanticLabel: '${product.name}, ${Formatters.money(product.price)}${product.isOfficial ? ', official' : ''}${soldOut ? ', out of stock' : ''}',
       onTap: () => context.push(Routes.product(product.slug), extra: heroTag),
       child: SizedBox(
         width: width,
@@ -110,10 +118,18 @@ class ProductCard extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    Positioned(left: 5.4 * s, top: 5.9 * s, child: ProductBadge(product: product, scale: s)),
+                    if (product.isOfficial)
+                      OfficialMark(style: badge, inset: 4 * s, scale: badge.scaleFor(0.72 * s)),
+                    Positioned(
+                      left: 4 * s,
+                      top: product.isOfficial && badge.position == 'top-left' ? badge.dropFor(22 * s) : 4 * s,
+                      child: ProductBadge(product: product, scale: s),
+                    ),
                     Positioned(
                       right: 5.4 * s - WishlistHeart.hitSlop,
-                      top: 5.4 * s - WishlistHeart.hitSlop,
+                      top: product.isOfficial && badge.position == 'top-right'
+                          ? badge.dropFor(24 * s)
+                          : 5.4 * s - WishlistHeart.hitSlop,
                       child: WishlistHeart(product: product, diameter: 20.5 * s, iconSize: 10.5 * s),
                     ),
                   ],
@@ -222,6 +238,89 @@ class _PriceBlock extends StatelessWidget {
               style: AppTypography.strike.copyWith(fontSize: 8.6 * s, height: 1.1),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Pins the Official mark in the store's chosen corner, leaving room for the heart on the right.
+class OfficialMark extends StatelessWidget {
+  const OfficialMark({super.key, required this.style, required this.inset, required this.scale, this.maxWidth});
+
+  final OfficialBadgeStyle style;
+  final double inset;
+  final double scale;
+  final double? maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget badge = OfficialBadge(scale: scale, color: style.color);
+    final limit = maxWidth;
+    if (limit != null) {
+      badge = ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: limit),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: style.isLeft ? Alignment.centerLeft : Alignment.centerRight,
+          child: badge,
+        ),
+      );
+    }
+    return Positioned(
+      left: style.isLeft ? inset : null,
+      right: style.isLeft ? null : inset,
+      top: style.isTop ? inset : null,
+      bottom: style.isTop ? null : inset,
+      child: badge,
+    );
+  }
+}
+
+/// The same Official mark used on the product page, scaled down for cards and rows.
+class OfficialBadge extends StatelessWidget {
+  const OfficialBadge({super.key, this.scale = 1, this.color = const Color(0xFF2864E8)});
+
+  final double scale;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = scale;
+    final ink = color.computeLuminance() > 0.7 ? const Color(0xFF172033) : Colors.white;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xF5FFFFFF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+        boxShadow: [
+          BoxShadow(color: const Color(0x29172033), blurRadius: 12 * s, offset: Offset(0, 4 * s)),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(4 * s, 4 * s, 10 * s, 4 * s),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 18 * s,
+              height: 18 * s,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(PhosphorIconsBold.check, size: 11 * s, color: ink),
+            ),
+            SizedBox(width: 6 * s),
+            Text(
+              'Official',
+              textScaler: TextScaler.noScaling,
+              style: AppTypography.bodyLarge.copyWith(
+                fontSize: 12 * s,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

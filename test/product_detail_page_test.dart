@@ -9,6 +9,7 @@ import 'package:pickorbeet/core/providers/core_providers.dart';
 import 'package:pickorbeet/core/theme/theme.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
+import 'package:pickorbeet/features/catalog/repositories/catalog_repository.dart';
 import 'package:pickorbeet/features/catalog/view/pages/product_detail_page.dart';
 import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -378,6 +379,13 @@ Future<void> _show(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        storeSettingsProvider.overrideWith((ref) async => const StoreSettings(
+          popularSearches: [],
+          address: '',
+          phones: [],
+          emails: [],
+          businessHours: '',
+        )),
         cartNotifierProvider.overrideWith(_RecordingCart.new),
         productDetailProvider(
           detail.summary.slug,
