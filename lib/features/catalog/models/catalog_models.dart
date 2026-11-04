@@ -246,6 +246,7 @@ class ProductSummary {
     required this.variants,
     this.comparePrice,
     this.primaryImage,
+    this.galleryImages = const [],
     this.subcategoryName,
     this.rating,
     this.reviewCount,
@@ -253,28 +254,38 @@ class ProductSummary {
     this.warrantyPeriod = '',
   });
 
-  factory ProductSummary.fromMap(Json map) => ProductSummary(
-    id: map.str('id'),
-    name: map.str('name'),
-    slug: map.str('slug'),
-    shortDescription: map.str('short_description'),
-    sku: map.str('sku'),
-    price: map.money('price'),
-    comparePrice: map.moneyOrNull('compare_price'),
-    primaryImage: map.strOrNull('primary_image'),
-    discountPercentage: map.integer('discount_percentage'),
-    stockQuantity: map.integer('stock_quantity'),
-    isOutOfStock: map.boolean('is_out_of_stock'),
-    isLowStock: map.boolean('is_low_stock'),
-    isFeatured: map.boolean('is_featured'),
-    categoryName: map.str('category_name'),
-    subcategoryName: map.strOrNull('subcategory_name'),
-    variants: map.listOf('variants', ProductVariant.fromMap),
-    rating: _readRating(map),
-    reviewCount: _readReviewCount(map),
-    isOfficial: map.boolean('is_official'),
-    warrantyPeriod: map.str('warranty_period'),
-  );
+  factory ProductSummary.fromMap(Json map) {
+    final primary = map.strOrNull('primary_image');
+    final gallery = <String>[
+      for (final item in (map['gallery_images'] is List ? map['gallery_images'] as List : const []))
+        if (item != null && '$item'.trim().isNotEmpty) '$item'.trim(),
+    ];
+    return ProductSummary(
+      id: map.str('id'),
+      name: map.str('name'),
+      slug: map.str('slug'),
+      shortDescription: map.str('short_description'),
+      sku: map.str('sku'),
+      price: map.money('price'),
+      comparePrice: map.moneyOrNull('compare_price'),
+      primaryImage: primary,
+      galleryImages: gallery.isNotEmpty
+          ? gallery
+          : [if (primary != null && primary.isNotEmpty) primary],
+      discountPercentage: map.integer('discount_percentage'),
+      stockQuantity: map.integer('stock_quantity'),
+      isOutOfStock: map.boolean('is_out_of_stock'),
+      isLowStock: map.boolean('is_low_stock'),
+      isFeatured: map.boolean('is_featured'),
+      categoryName: map.str('category_name'),
+      subcategoryName: map.strOrNull('subcategory_name'),
+      variants: map.listOf('variants', ProductVariant.fromMap),
+      rating: _readRating(map),
+      reviewCount: _readReviewCount(map),
+      isOfficial: map.boolean('is_official'),
+      warrantyPeriod: map.str('warranty_period'),
+    );
+  }
 
   final String id;
   final String name;
@@ -284,6 +295,9 @@ class ProductSummary {
   final String price;
   final String? comparePrice;
   final String? primaryImage;
+
+  /// Product / variant photo URLs for card autoplay. Falls back to [primaryImage].
+  final List<String> galleryImages;
   final int discountPercentage;
   final int stockQuantity;
   final bool isOutOfStock;
@@ -326,6 +340,7 @@ class ProductImage {
     required this.image,
     required this.altText,
     required this.isPrimary,
+    this.variant,
   });
 
   factory ProductImage.fromMap(Json map) => ProductImage(
@@ -333,12 +348,67 @@ class ProductImage {
     image: map.str('image'),
     altText: map.str('alt_text'),
     isPrimary: map.boolean('is_primary'),
+    variant: map.strOrNull('variant'),
   );
 
   final String id;
   final String image;
   final String altText;
   final bool isPrimary;
+
+  /// When set, the store/app show this image for that variant (e.g. a color).
+  final String? variant;
+}
+
+@immutable
+class ProductVideo {
+  const ProductVideo({
+    required this.id,
+    required this.youtubeUrl,
+    required this.youtubeId,
+    this.title = '',
+    this.isPrimary = false,
+    this.variant,
+  });
+
+  factory ProductVideo.fromMap(Json map) => ProductVideo(
+    id: map.str('id'),
+    youtubeUrl: map.str('youtube_url'),
+    youtubeId: map.str('youtube_id'),
+    title: map.str('title'),
+    isPrimary: map.boolean('is_primary'),
+    variant: map.strOrNull('variant'),
+  );
+
+  final String id;
+  final String youtubeUrl;
+  final String youtubeId;
+  final String title;
+  final bool isPrimary;
+  final String? variant;
+
+  String get embedUrl => youtubeId.isEmpty
+      ? ''
+      : 'https://www.youtube-nocookie.com/embed/$youtubeId?rel=0&modestbranding=1';
+
+  String get thumbnailUrl => youtubeId.isEmpty
+      ? ''
+      : 'https://i.ytimg.com/vi/$youtubeId/hqdefault.jpg';
+}
+
+@immutable
+class ProductSpec {
+  const ProductSpec({required this.name, required this.value});
+
+  factory ProductSpec.fromMap(Json map) => ProductSpec(
+    name: map.str('name').trim(),
+    value: map.str('value').trim(),
+  );
+
+  final String name;
+  final String value;
+
+  bool get isUsable => name.isNotEmpty && value.isNotEmpty;
 }
 
 @immutable
@@ -348,10 +418,12 @@ class ProductDetail {
     required this.description,
     required this.images,
     required this.categorySlug,
+    this.videos = const [],
     this.subcategorySlug,
     this.size,
     this.color,
     this.material,
+    this.specifications = const [],
     this.optionGroups = const [],
   });
 
@@ -360,6 +432,11 @@ class ProductDetail {
     final subcategory = map.obj('subcategory');
     final images = map.listOf('images', ProductImage.fromMap)
       ..sort((a, b) => a.isPrimary == b.isPrimary ? 0 : (a.isPrimary ? -1 : 1));
+    final videos = map.listOf('videos', ProductVideo.fromMap);
+    final specs = map
+        .listOf('specifications', ProductSpec.fromMap)
+        .where((row) => row.isUsable)
+        .toList(growable: false);
     return ProductDetail(
       summary: ProductSummary.fromMap({
         ...map,
@@ -368,11 +445,13 @@ class ProductDetail {
       }),
       description: map.str('description'),
       images: images,
+      videos: videos,
       categorySlug: category?.str('slug') ?? '',
       subcategorySlug: subcategory?.strOrNull('slug'),
       size: map.strOrNull('size'),
       color: map.strOrNull('color'),
       material: map.strOrNull('material'),
+      specifications: specs,
       optionGroups: map.listOf('option_groups', OptionGroup.fromMap),
     );
   }
@@ -380,11 +459,13 @@ class ProductDetail {
   final ProductSummary summary;
   final String description;
   final List<ProductImage> images;
+  final List<ProductVideo> videos;
   final String categorySlug;
   final String? subcategorySlug;
   final String? size;
   final String? color;
   final String? material;
+  final List<ProductSpec> specifications;
   final List<OptionGroup> optionGroups;
 
   /// Description with HTML removed, keeping paragraph and list breaks.
@@ -399,19 +480,18 @@ class ProductDetail {
     return urls;
   }
 
-  /// Short spec rows shown under the description.
-  List<(String, String)> get specs => [
-    if (color != null && color!.isNotEmpty) ('Color', color!),
-    if (size != null && size!.isNotEmpty) ('Size', size!),
-    if (material != null && material!.isNotEmpty) ('Material', material!),
-    (
-      'Category',
-      [
-        summary.categoryName,
-        summary.subcategoryName,
-      ].whereType<String>().join(' · '),
-    ),
-  ];
+  /// Spec rows for the product page. Custom API rows win; otherwise basic fields.
+  List<(String, String)> get specs {
+    if (specifications.isNotEmpty) {
+      return [for (final row in specifications) (row.name, row.value)];
+    }
+    return [
+      if (summary.sku.trim().isNotEmpty) ('Product code', summary.sku.trim()),
+      if (color != null && color!.isNotEmpty) ('Color', color!),
+      if (size != null && size!.isNotEmpty) ('Size', size!),
+      if (material != null && material!.isNotEmpty) ('Material', material!),
+    ];
+  }
 }
 
 String _plainProductText(String raw) {
@@ -507,6 +587,7 @@ sealed class HomeSection {
         viewAllLabel: map.str('view_all_label', 'View All'),
         viewAllUrl: map.str('view_all_url', '/products'),
         products: map.listOf('products', ProductSummary.fromMap),
+        bannerImage: map.strOrNull('banner_image'),
       ),
       _ => null,
     };
@@ -560,11 +641,15 @@ final class ProductsSection extends HomeSection {
     required this.viewAllLabel,
     required this.viewAllUrl,
     required this.products,
+    this.bannerImage,
   });
 
   final String viewAllLabel;
   final String viewAllUrl;
   final List<ProductSummary> products;
+
+  /// Listing-page header for View All (Trending / New Arrivals).
+  final String? bannerImage;
 }
 
 /// Filters for the product list endpoint.
@@ -645,4 +730,144 @@ class ProductQuery {
     minPrice,
     maxPrice,
   );
+}
+
+@immutable
+class ProductReviewImage {
+  const ProductReviewImage({required this.id, required this.image, this.sortOrder = 0});
+
+  factory ProductReviewImage.fromMap(Json map) => ProductReviewImage(
+        id: map.str('id'),
+        image: map.str('image'),
+        sortOrder: map.integer('sort_order'),
+      );
+
+  final String id;
+  final String image;
+  final int sortOrder;
+}
+
+@immutable
+class ProductReview {
+  const ProductReview({
+    required this.id,
+    required this.author,
+    required this.rating,
+    required this.comment,
+    required this.createdAt,
+    this.images = const [],
+  });
+
+  factory ProductReview.fromMap(Json map) => ProductReview(
+        id: map.str('id'),
+        author: map.str('author'),
+        rating: map.integer('rating'),
+        comment: map.str('comment'),
+        createdAt: map.str('created_at'),
+        images: map.listOf('images', ProductReviewImage.fromMap),
+      );
+
+  final String id;
+  final String author;
+  final int rating;
+  final String comment;
+  final String createdAt;
+  final List<ProductReviewImage> images;
+}
+
+@immutable
+class ProductReviewsPayload {
+  const ProductReviewsPayload({
+    required this.average,
+    required this.count,
+    required this.filteredCount,
+    required this.ratingBreakdown,
+    required this.canReview,
+    required this.results,
+    this.mine,
+    this.next,
+    this.previous,
+  });
+
+  factory ProductReviewsPayload.fromMap(Json map) {
+    final breakdownRaw = map['rating_breakdown'];
+    final breakdown = <int, int>{1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+    if (breakdownRaw is Map) {
+      for (final entry in breakdownRaw.entries) {
+        final star = int.tryParse('${entry.key}');
+        final total = entry.value is num ? (entry.value as num).toInt() : int.tryParse('${entry.value}');
+        if (star != null && total != null && star >= 1 && star <= 5) {
+          breakdown[star] = total;
+        }
+      }
+    }
+    final mineRaw = map.obj('mine');
+    return ProductReviewsPayload(
+      average: () {
+        final value = map['average'];
+        if (value is num) return value.toDouble();
+        if (value is String) return double.tryParse(value);
+        return null;
+      }(),
+      count: map.integer('count'),
+      filteredCount: map.integer('filtered_count', map.integer('count')),
+      ratingBreakdown: breakdown,
+      canReview: map.boolean('can_review'),
+      mine: mineRaw == null ? null : ProductReview.fromMap(mineRaw),
+      results: map.listOf('results', ProductReview.fromMap),
+      next: map.strOrNull('next'),
+      previous: map.strOrNull('previous'),
+    );
+  }
+
+  final double? average;
+  final int count;
+  final int filteredCount;
+  final Map<int, int> ratingBreakdown;
+  final bool canReview;
+  final ProductReview? mine;
+  final List<ProductReview> results;
+  final String? next;
+  final String? previous;
+}
+
+@immutable
+class ProductReviewsQuery {
+  const ProductReviewsQuery({
+    this.rating,
+    this.withPhotos = false,
+    this.sort = 'newest',
+    this.page = 1,
+    this.pageSize = 20,
+  });
+
+  final int? rating;
+  final bool withPhotos;
+  final String sort;
+  final int page;
+  final int pageSize;
+
+  Map<String, Object?> toQuery() => {
+        'sort': sort,
+        'page': '$page',
+        'page_size': '$pageSize',
+        if (rating != null) 'rating': '$rating',
+        if (withPhotos) 'with_photos': '1',
+      };
+
+  ProductReviewsQuery copyWith({
+    int? rating,
+    bool clearRating = false,
+    bool? withPhotos,
+    String? sort,
+    int? page,
+    int? pageSize,
+  }) =>
+      ProductReviewsQuery(
+        rating: clearRating ? null : (rating ?? this.rating),
+        withPhotos: withPhotos ?? this.withPhotos,
+        sort: sort ?? this.sort,
+        page: page ?? this.page,
+        pageSize: pageSize ?? this.pageSize,
+      );
 }

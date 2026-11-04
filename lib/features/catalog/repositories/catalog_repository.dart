@@ -74,18 +74,48 @@ class CatalogRepository {
         (body) => ProductDetail.fromMap(asJson(body)),
       );
 
+  /// Filtered, paginated reviews for a product PDP (sends the session so can_review/mine work).
+  Future<Either<AppFailure, ProductReviewsPayload>> reviews(
+    String slug, [
+    ProductReviewsQuery query = const ProductReviewsQuery(),
+  ]) =>
+      guardRequest(
+        () => _api.get(
+          '/products/${Uri.encodeComponent(slug)}/reviews/',
+          query: query.toQuery(),
+        ),
+        (body) => ProductReviewsPayload.fromMap(asJson(body)),
+      );
+
   /// Creates the customer's review, or replaces the one they already wrote.
+  /// Pass [images] to replace the photo set (JPEG/PNG/WebP/GIF, max 5).
   Future<Either<AppFailure, bool>> saveReview(
     String slug, {
     required int rating,
     required String comment,
-  }) => guardRequest(
+    List<({String filename, List<int> bytes})> images = const [],
+  }) {
+    if (images.isEmpty) {
+      return guardRequest(
         () => _api.post(
           '/products/${Uri.encodeComponent(slug)}/reviews/',
           body: {'rating': rating, 'comment': comment},
         ),
         (_) => true,
       );
+    }
+    return guardRequest(
+      () => _api.postFiles(
+        '/products/${Uri.encodeComponent(slug)}/reviews/',
+        fields: {'rating': '$rating', 'comment': comment},
+        files: [
+          for (final image in images)
+            (field: 'images', filename: image.filename, bytes: image.bytes),
+        ],
+      ),
+      (_) => true,
+    );
+  }
 
   Future<Either<AppFailure, StoreSettings>> storeSettings() => guardRequest(
         () => _api.get('/products/settings/public/', authenticated: false),
@@ -129,6 +159,7 @@ class StoreSettings {
     required this.emails,
     required this.businessHours,
     this.officialBadge = OfficialBadgeStyle.standard,
+    this.defaultDirectoryBanner,
   });
 
   factory StoreSettings.fromMap(Json map) => StoreSettings(
@@ -157,6 +188,7 @@ class StoreSettings {
           color: map.str('official_badge_color'),
           position: map.str('official_badge_position'),
         ),
+        defaultDirectoryBanner: map.strOrNull('default_directory_banner'),
       );
 
   final List<String> popularSearches;
@@ -165,4 +197,7 @@ class StoreSettings {
   final List<String> emails;
   final String businessHours;
   final OfficialBadgeStyle officialBadge;
+
+  /// Fallback hero for product list / category pages when no page banner is set.
+  final String? defaultDirectoryBanner;
 }

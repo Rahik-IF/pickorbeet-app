@@ -42,7 +42,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     await result.fold(
       (failure) async => showToast(context, failure.message, kind: ToastKind.error),
       (session) async {
-        await ref.read(sessionNotifierProvider.notifier).signIn(session);
+        await completeSignIn(ref, session);
         if (!mounted) return;
         context.go(_next);
       },

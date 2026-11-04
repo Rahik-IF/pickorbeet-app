@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pickorbeet/core/network/json.dart';
+import 'package:pickorbeet/core/utils/formatters.dart';
 
 /// How the left stub draws the offer.
 enum VoucherOfferKind { amount, percent, shipping }
@@ -65,9 +67,17 @@ class VoucherTone {
     button: Color(0xFF9AA3B2),
     soft: Color(0xFFE4E7EE),
   );
+
+  static const _availableCycle = [orange, red, purple, blue];
+
+  static VoucherTone forIndex(int index, VoucherState state) => switch (state) {
+        VoucherState.expired => muted,
+        VoucherState.used => purple,
+        VoucherState.available => _availableCycle[index % _availableCycle.length],
+      };
 }
 
-/// One shopper voucher, in the order the design shows them.
+/// One shopper voucher card.
 @immutable
 class StoreVoucher {
   const StoreVoucher({
@@ -91,7 +101,7 @@ class StoreVoucher {
   final VoucherState state;
   final VoucherTone tone;
 
-  /// Large stub line, such as `৳200` or `10%`. Shipping uses the caption instead.
+  /// Large stub line, such as `৳200` or `10%`.
   final String headline;
   final String caption;
   final String minimum;
@@ -115,101 +125,80 @@ class StoreVoucher {
         VoucherState.used => 'Used',
         VoucherState.expired => 'Expired',
       };
+
+  /// Maps one row from `GET /orders/coupons/`.
+  factory StoreVoucher.fromApi(Json json, {int index = 0}) {
+    final state = switch (json.str('state')) {
+      'used' => VoucherState.used,
+      'expired' => VoucherState.expired,
+      _ => VoucherState.available,
+    };
+    final type = json.str('discount_type');
+    final value = json.money('discount_value');
+    final min = Formatters.decimal(json.money('minimum_order_amount'));
+    final until = json.date('valid_until');
+    final usedAt = json.date('used_at');
+    final description = json.str('description').trim();
+    final name = json.str('name');
+    final code = json.str('code');
+    final isPercent = type == 'percentage';
+    final offer = isPercent
+        ? '${Formatters.amount(value)}%'
+        : '${Formatters.taka}${Formatters.amount(value)}';
+    final when = switch (state) {
+      VoucherState.used => 'Used on ${Formatters.date(usedAt)}',
+      VoucherState.expired => 'Expired on ${Formatters.date(until)}',
+      VoucherState.available => 'Valid till ${Formatters.date(until)}',
+    };
+    final minimum = min > Formatters.decimal('0')
+        ? 'Min. spend ${Formatters.money(min)}'
+        : 'No minimum spend';
+    final detail = switch (state) {
+      VoucherState.used => 'You have already used this voucher',
+      VoucherState.expired => 'This voucher has expired',
+      VoucherState.available when description.isNotEmpty => description,
+      VoucherState.available => isPercent
+          ? 'Get $offer off your order'
+          : 'Get ${Formatters.money(value)} off your order',
+    };
+    final terms = description.isNotEmpty
+        ? description
+        : switch (state) {
+            VoucherState.used =>
+              'This voucher was applied on ${Formatters.date(usedAt)} and cannot be used again.',
+            VoucherState.expired =>
+              'This offer ended on ${Formatters.date(until)}. It no longer applies at checkout.',
+            VoucherState.available =>
+              'Code $code. $minimum. One voucher per order.',
+          };
+
+    return StoreVoucher(
+      id: json.str('id'),
+      code: code,
+      kind: isPercent ? VoucherOfferKind.percent : VoucherOfferKind.amount,
+      state: state,
+      tone: VoucherTone.forIndex(index, state),
+      headline: offer,
+      caption: 'OFF',
+      minimum: minimum,
+      title: name.isEmpty ? code : name,
+      detail: detail,
+      when: when,
+      terms: terms,
+    );
+  }
 }
 
-/// The six offers in the design. Four are still available, one is used, one has expired.
-const storeVouchers = <StoreVoucher>[
-  StoreVoucher(
-    id: 'electronics',
-    code: 'ELEC200',
-    kind: VoucherOfferKind.amount,
-    state: VoucherState.available,
-    tone: VoucherTone.orange,
-    headline: '৳200',
-    caption: 'OFF',
-    minimum: 'Min. spend ৳1,500',
-    title: 'Electronics Special',
-    detail: 'Get ৳200 off on all electronics products',
-    when: 'Valid till 31 Oct 2026',
-    terms: 'Applies to electronics when your order is at least ৳1,500. One voucher per order.',
-  ),
-  StoreVoucher(
-    id: 'shipping',
-    code: 'SHIPFREE',
-    kind: VoucherOfferKind.shipping,
-    state: VoucherState.available,
-    tone: VoucherTone.blue,
-    headline: 'FREE',
-    caption: 'SHIPPING',
-    minimum: 'Min. spend ৳999',
-    title: 'Free Shipping Voucher',
-    detail: 'Get free shipping on all products',
-    when: 'Valid till 15 Nov 2026',
-    terms: 'Waives delivery on any order of at least ৳999. It does not apply to cash-on-delivery charges.',
-  ),
-  StoreVoucher(
-    id: 'all',
-    code: 'ALL10',
-    kind: VoucherOfferKind.percent,
-    state: VoucherState.available,
-    tone: VoucherTone.red,
-    headline: '10%',
-    caption: 'OFF',
-    minimum: 'Min. spend ৳2,000',
-    title: 'All Categories',
-    detail: 'Get 10% off on any category',
-    when: 'Valid till 30 Nov 2026',
-    terms: 'Takes 10% off an order of at least ৳2,000 across any category. One voucher per order.',
-  ),
-  StoreVoucher(
-    id: 'mega',
-    code: 'MEGA500',
-    kind: VoucherOfferKind.amount,
-    state: VoucherState.used,
-    tone: VoucherTone.purple,
-    headline: '৳500',
-    caption: 'OFF',
-    minimum: 'Min. spend ৳5,000',
-    title: 'Mega Sale Voucher',
-    detail: 'You have already used this voucher',
-    when: 'Used on 12 Oct 2026',
-    terms: 'This voucher was applied on 12 Oct 2026 and cannot be used again.',
-  ),
-  StoreVoucher(
-    id: 'weekend',
-    code: 'WEEK15',
-    kind: VoucherOfferKind.percent,
-    state: VoucherState.expired,
-    tone: VoucherTone.muted,
-    headline: '15%',
-    caption: 'OFF',
-    minimum: 'Min. spend ৳3,000',
-    title: 'Weekend Special',
-    detail: 'This voucher has expired',
-    when: 'Expired on 01 Oct 2026',
-    terms: 'This offer ended on 01 Oct 2026. It no longer applies at checkout.',
-  ),
-  StoreVoucher(
-    id: 'welcome',
-    code: 'APP100',
-    kind: VoucherOfferKind.amount,
-    state: VoucherState.available,
-    tone: VoucherTone.orange,
-    headline: '৳100',
-    caption: 'OFF',
-    minimum: 'Min. spend ৳800',
-    title: 'Welcome Offer',
-    detail: 'Get ৳100 off on your next order',
-    when: 'Valid till 31 Dec 2026',
-    terms: 'Takes ৳100 off an order of at least ৳800. One welcome voucher per customer.',
-  ),
-];
-
-List<StoreVoucher> vouchersFor(VoucherFilter filter) => switch (filter) {
-      VoucherFilter.all => storeVouchers,
-      VoucherFilter.available => storeVouchers.where((voucher) => voucher.state == VoucherState.available).toList(),
-      VoucherFilter.used => storeVouchers.where((voucher) => voucher.state == VoucherState.used).toList(),
-      VoucherFilter.expired => storeVouchers.where((voucher) => voucher.state == VoucherState.expired).toList(),
+List<StoreVoucher> vouchersFor(List<StoreVoucher> vouchers, VoucherFilter filter) =>
+    switch (filter) {
+      VoucherFilter.all => vouchers,
+      VoucherFilter.available =>
+        vouchers.where((voucher) => voucher.state == VoucherState.available).toList(),
+      VoucherFilter.used =>
+        vouchers.where((voucher) => voucher.state == VoucherState.used).toList(),
+      VoucherFilter.expired =>
+        vouchers.where((voucher) => voucher.state == VoucherState.expired).toList(),
     };
 
-int voucherCount(VoucherFilter filter) => vouchersFor(filter).length;
+int voucherCount(List<StoreVoucher> vouchers, VoucherFilter filter) =>
+    vouchersFor(vouchers, filter).length;

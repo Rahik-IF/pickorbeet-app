@@ -14,12 +14,14 @@ import 'package:pickorbeet/core/theme/app_pallete.dart';
 import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/core/widgets/app_header.dart';
+import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/core/widgets/section.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/account/profile_photo.dart';
 import 'package:pickorbeet/features/account/repositories/order_summary_repository.dart';
 import 'package:pickorbeet/features/auth/view/widgets/google_sign_in_button.dart';
 import 'package:pickorbeet/features/home/view/widgets/category_section_card.dart';
+import 'package:pickorbeet/features/support/help_unread.dart';
 
 /// Account dashboard: profile, order counts, shortcuts, and sign-out.
 class AccountPage extends ConsumerStatefulWidget {
@@ -615,7 +617,7 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-class _ShortcutGrid extends StatelessWidget {
+class _ShortcutGrid extends ConsumerWidget {
   const _ShortcutGrid();
 
   static const _tiles = <_Shortcut>[
@@ -630,16 +632,27 @@ class _ShortcutGrid extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final helpUnread = ref.watch(helpUnreadProvider);
     return Column(
       children: [
         for (var i = 0; i < _tiles.length; i += 2) ...[
           if (i > 0) const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _ShortcutTile(tile: _tiles[i])),
+              Expanded(
+                child: _ShortcutTile(
+                  tile: _tiles[i],
+                  badge: _tiles[i].location == Routes.help ? helpUnread : 0,
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _ShortcutTile(tile: _tiles[i + 1])),
+              Expanded(
+                child: _ShortcutTile(
+                  tile: _tiles[i + 1],
+                  badge: _tiles[i + 1].location == Routes.help ? helpUnread : 0,
+                ),
+              ),
             ],
           ),
         ],
@@ -660,15 +673,18 @@ class _Shortcut {
 }
 
 class _ShortcutTile extends StatelessWidget {
-  const _ShortcutTile({required this.tile});
+  const _ShortcutTile({required this.tile, this.badge = 0});
 
   final _Shortcut tile;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
       pressedScale: 0.98,
-      semanticLabel: '${tile.title}. ${tile.subtitle}',
+      semanticLabel: badge > 0
+          ? '${tile.title}. ${tile.subtitle}. $badge unread'
+          : '${tile.title}. ${tile.subtitle}',
       onTap: () => tile.tab ? context.go(tile.location) : context.push(tile.location),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -680,12 +696,23 @@ class _ShortcutTile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
           child: Row(
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: tile.tint.background, borderRadius: BorderRadius.circular(10)),
-                alignment: Alignment.center,
-                child: Icon(tile.icon, size: 18, color: tile.tint.icon),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(color: tile.tint.background, borderRadius: BorderRadius.circular(10)),
+                    alignment: Alignment.center,
+                    child: Icon(tile.icon, size: 18, color: tile.tint.icon),
+                  ),
+                  if (badge > 0)
+                    Positioned(
+                      top: -4,
+                      right: -4,
+                      child: CountBadge(count: badge, size: 14),
+                    ),
+                ],
               ),
               const SizedBox(width: 8),
               Expanded(

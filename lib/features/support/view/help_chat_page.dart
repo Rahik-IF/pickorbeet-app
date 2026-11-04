@@ -14,6 +14,7 @@ import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/theme/theme.dart';
 import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/bottom_nav.dart';
+import 'package:pickorbeet/core/widgets/fullscreen_image_gallery.dart';
 import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/account/view/orders_palette.dart';
@@ -582,12 +583,19 @@ class _Bubble extends StatelessWidget {
                     if (message.image.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6),
-                        child: SizedBox(
-                          width: 180,
-                          height: 140,
-                          child: AppNetworkImage(
-                            url: message.image,
-                            borderRadius: BorderRadius.circular(10),
+                        child: Pressable(
+                          semanticLabel: 'View full image',
+                          onTap: () => openFullscreenImages(
+                            context,
+                            urls: [message.image],
+                          ),
+                          child: SizedBox(
+                            width: 180,
+                            height: 140,
+                            child: AppNetworkImage(
+                              url: message.image,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                       ),

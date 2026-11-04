@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pickorbeet/core/constants/server_constant.dart';
 import 'package:pickorbeet/core/network/json.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
+import 'package:pickorbeet/features/notifications/notification_inbox.dart';
 import 'package:pickorbeet/features/support/help_models.dart';
 import 'package:pickorbeet/features/support/support_repository.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -78,15 +79,28 @@ class HelpChatController extends AutoDisposeNotifier<HelpChatState> {
     result.match(
       (failure) =>
           state = state.copyWith(loading: false, error: failure.message),
-      (thread) => state = state.copyWith(
-        loading: false,
-        error: '',
-        profile: thread.profile,
-        messages: thread.messages,
-        agentOnline: thread.agentOnline,
-      ),
+      (thread) {
+        state = state.copyWith(
+          loading: false,
+          error: '',
+          profile: thread.profile,
+          messages: thread.messages,
+          agentOnline: thread.agentOnline,
+        );
+        _syncRead();
+      },
     );
     if (result.isRight()) await _connect(forceRefresh: false);
+  }
+
+  void _syncRead() {
+    ref.read(notificationInboxProvider.notifier).clearSupportReplies();
+  }
+
+  Future<void> _markRead() async {
+    await ref.read(supportRepositoryProvider).markRead();
+    if (!_alive) return;
+    _syncRead();
   }
 
   Future<String?> sendText(String body) => _send(body: body);
@@ -208,7 +222,7 @@ class HelpChatController extends AutoDisposeNotifier<HelpChatState> {
         final message = HelpMessage.fromJson(row);
         _upsert(message);
         if (!message.fromCustomer) {
-          unawaited(ref.read(supportRepositoryProvider).markRead());
+          unawaited(_markRead());
         }
       case 'message.read':
         _applyRead(json.str('author'), json.date('read_at'));
@@ -225,12 +239,15 @@ class HelpChatController extends AutoDisposeNotifier<HelpChatState> {
     if (!_alive) return;
     result.match(
       (_) {},
-      (thread) => state = state.copyWith(
-        profile: thread.profile,
-        messages: thread.messages,
-        agentOnline: thread.agentOnline,
-        error: '',
-      ),
+      (thread) {
+        state = state.copyWith(
+          profile: thread.profile,
+          messages: thread.messages,
+          agentOnline: thread.agentOnline,
+          error: '',
+        );
+        _syncRead();
+      },
     );
   }
 

@@ -47,6 +47,7 @@ const _home = AddressModel(
   phone: '01712345678',
   addressLine1: '544/2B, Nandonik Dream Tower, 6th floor',
   addressLine2: 'East Kazipara, Mirpur',
+  division: 'Dhaka',
   city: 'Dhaka',
   district: 'Dhaka',
   postalCode: '1216',
@@ -61,6 +62,7 @@ const _office = AddressModel(
   phone: '01712345678',
   addressLine1: 'Orbeetal, House 12, Road 3, Block B',
   addressLine2: 'Niketon, Gulshan',
+  division: 'Dhaka',
   city: 'Dhaka',
   district: 'Dhaka',
   postalCode: '1212',
@@ -122,7 +124,7 @@ void main() {
   test('address lines and the checkout body match the design', () {
     expect(checkoutAddressLines(_home), [
       '544/2B, Nandonik Dream Tower, 6th floor',
-      'East Kazipara, Mirpur, Dhaka-1216',
+      'East Kazipara, Mirpur, Dhaka, 1216',
     ]);
     expect(
       checkoutContactLine(_home),
@@ -139,6 +141,7 @@ void main() {
       phone: _home.phone,
       line1: _home.addressLine1,
       line2: _home.addressLine2,
+      division: _home.division,
       city: _home.city,
       district: _home.district,
       postalCode: _home.postalCode,
@@ -147,7 +150,9 @@ void main() {
       couponCode: 'SAVE10',
     );
     expect(body['shipping_phone'], '01712345678');
+    expect(body['shipping_division'], 'Dhaka');
     expect(body['payment_method'], 'bkash');
+    expect(body['platform'], 'app');
     expect(body['item_ids'], ['line-1']);
     expect(body['coupon_code'], 'SAVE10');
     expect(body.containsKey('guest_name'), isFalse);

@@ -21,6 +21,7 @@ import 'package:pickorbeet/core/widgets/header_background.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/account/location/address_location.dart';
 import 'package:pickorbeet/features/account/repositories/address_repository.dart';
+import 'package:pickorbeet/features/account/view/widgets/bd_address_cascade.dart';
 
 /// Saved delivery addresses, matched to the delivery-address design.
 class AddressesPage extends ConsumerStatefulWidget {
@@ -861,9 +862,11 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
   late final TextEditingController _phone;
   late final TextEditingController _line1;
   late final TextEditingController _line2;
-  late final TextEditingController _city;
-  late final TextEditingController _district;
-  late final TextEditingController _postal;
+  late String _division;
+  late String _district;
+  late String _postOffice;
+  late String _postal;
+  late String _city;
   late bool _defaultAddress;
   var _saving = false;
   String? _error;
@@ -880,15 +883,17 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
     _phone = TextEditingController(text: existing == null ? '' : _displayPhone(existing.phone));
     _line1 = TextEditingController(text: existing?.addressLine1 ?? place?.line1 ?? '');
     _line2 = TextEditingController(text: existing?.addressLine2 ?? place?.line2 ?? '');
-    _city = TextEditingController(text: existing?.city ?? place?.city ?? '');
-    _district = TextEditingController(text: existing?.district ?? place?.district ?? '');
-    _postal = TextEditingController(text: existing?.postalCode ?? place?.postalCode ?? '');
+    _division = existing?.division ?? '';
+    _district = existing?.district ?? place?.district ?? '';
+    _postOffice = existing?.postOffice ?? '';
+    _postal = existing?.postalCode ?? place?.postalCode ?? '';
+    _city = existing?.city ?? place?.city ?? '';
     _defaultAddress = existing?.isDefault ?? widget.makeDefault;
   }
 
   @override
   void dispose() {
-    for (final controller in [_label, _name, _phone, _line1, _line2, _city, _district, _postal]) {
+    for (final controller in [_label, _name, _phone, _line1, _line2]) {
       controller.dispose();
     }
     super.dispose();
@@ -899,10 +904,16 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
     final name = _name.text.trim();
     final phone = Formatters.phoneForApi(_phone.text);
     final line1 = _line1.text.trim();
-    final city = _city.text.trim();
-    final district = _district.text.trim().isEmpty ? city : _district.text.trim();
-    if (label.isEmpty || name.isEmpty || phone.length < 11 || line1.isEmpty || city.isEmpty) {
-      setState(() => _error = 'Add a label, name, phone, street, and city.');
+    final city = _city.trim();
+    if (label.isEmpty ||
+        name.isEmpty ||
+        phone.length < 11 ||
+        line1.isEmpty ||
+        _division.trim().isEmpty ||
+        _district.trim().isEmpty ||
+        _postOffice.trim().isEmpty ||
+        city.isEmpty) {
+      setState(() => _error = 'Add a label, name, phone, street, division, district, post office, and city.');
       return;
     }
     setState(() {
@@ -916,9 +927,11 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
       phone: phone,
       addressLine1: line1,
       addressLine2: _line2.text.trim(),
+      division: _division.trim(),
       city: city,
-      district: district,
-      postalCode: _postal.text.trim(),
+      district: _district.trim(),
+      postOffice: _postOffice.trim(),
+      postalCode: _postal.trim(),
       country: widget.existing?.country ?? widget.place?.country ?? 'Bangladesh',
       isDefault: _defaultAddress,
     );
@@ -980,9 +993,28 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
             _Field(controller: _phone, label: 'Phone', keyboard: TextInputType.phone),
             _Field(controller: _line1, label: 'Street address'),
             _Field(controller: _line2, label: 'Area or landmark', hint: 'Optional'),
-            _Field(controller: _city, label: 'City'),
-            _Field(controller: _district, label: 'District', hint: 'Same as city if you leave this blank'),
-            _Field(controller: _postal, label: 'Postal code', hint: 'Optional', keyboard: TextInputType.number),
+            BdAddressCascade(
+              division: _division,
+              district: _district,
+              postOffice: _postOffice,
+              postalCode: _postal,
+              city: _city,
+              onChanged: ({
+                String? division,
+                String? district,
+                String? postOffice,
+                String? postalCode,
+                String? city,
+              }) {
+                setState(() {
+                  if (division != null) _division = division;
+                  if (district != null) _district = district;
+                  if (postOffice != null) _postOffice = postOffice;
+                  if (postalCode != null) _postal = postalCode;
+                  if (city != null) _city = city;
+                });
+              },
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _defaultAddress,

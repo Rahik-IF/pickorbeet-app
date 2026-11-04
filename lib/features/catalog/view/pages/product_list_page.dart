@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:pickorbeet/core/models/paginated.dart';
 import 'package:pickorbeet/core/motion/entrance.dart';
+import 'package:pickorbeet/core/motion/motion.dart';
 import 'package:pickorbeet/core/motion/pressable.dart';
 import 'package:pickorbeet/core/providers/wishlist_notifier.dart';
 import 'package:pickorbeet/core/router/routes.dart';
@@ -15,19 +18,25 @@ import 'package:pickorbeet/core/theme/theme.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/bottom_nav.dart';
+import 'package:pickorbeet/core/widgets/fullscreen_image_gallery.dart';
 import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/core/widgets/state_views.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/view/widgets/product_card.dart';
+import 'package:pickorbeet/features/catalog/view/widgets/product_card_gallery.dart';
 import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
+import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 /// A category or subcategory catalogue: hero, sibling chips, and the store's product cards.
 class ProductListPage extends ConsumerStatefulWidget {
-  const ProductListPage({super.key, required this.query, this.title});
+  const ProductListPage({super.key, required this.query, this.title, this.bannerImage});
 
   final ProductQuery query;
   final String? title;
+
+  /// Optional listing header from a homepage section (Trending / New Arrivals).
+  final String? bannerImage;
 
   @override
   ConsumerState<ProductListPage> createState() => _ProductListPageState();
@@ -98,6 +107,30 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     return false;
   }
 
+  String? _sectionBanner() {
+    if (widget.bannerImage != null && widget.bannerImage!.isNotEmpty) {
+      return widget.bannerImage;
+    }
+    // Deep links / refresh: resolve from cached homepage sections when possible.
+    final sections = ref.watch(homeSectionsProvider).valueOrNull;
+    if (sections == null) return null;
+    for (final section in sections) {
+      if (section is! ProductsSection) continue;
+      final image = section.bannerImage;
+      if (image == null || image.isEmpty) continue;
+      if (_query.featured && section.key == 'trending') return image;
+      if (!_query.featured &&
+          !_query.onSale &&
+          _query.categorySlug == null &&
+          section.key == 'new-arrivals' &&
+          widget.title != null &&
+          (widget.title == section.title || widget.title == 'New Arrivals')) {
+        return image;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const <CategoryModel>[];
@@ -105,6 +138,13 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final subcategory = _findSub(category, _query.subcategorySlug);
     final list = ref.watch(productListProvider(_query));
     final title = subcategory?.name ?? category?.name ?? widget.title ?? 'Products';
+    final defaultBanner =
+        ref.watch(storeSettingsProvider).asData?.value.defaultDirectoryBanner;
+    final heroImage = subcategory?.image ??
+        category?.bannerImage ??
+        category?.image ??
+        _sectionBanner() ??
+        defaultBanner;
 
     return Scaffold(
       backgroundColor: AppPallete.background,
@@ -130,7 +170,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                 child: _Hero(
                   title: title,
                   subtitle: subcategory?.description ?? category?.tagline ?? '',
-                  image: subcategory?.image ?? category?.bannerImage ?? category?.image,
+                  image: heroImage,
                   categoryName: category?.name,
                   onHome: () => context.go(Routes.home),
                   onCategory: category == null
@@ -608,9 +648,10 @@ class _CatalogCard extends ConsumerWidget {
                   Pressable(
                     semanticLabel: product.name,
                     onTap: () => context.push(Routes.product(product.slug)),
-                      child: AppNetworkImage(
-                      url: product.primaryImage,
-                      fit: BoxFit.contain,
+                    child: ProductCardGallery(
+                      urls: product.galleryImages.isNotEmpty
+                          ? product.galleryImages
+                          : [if (product.primaryImage != null) product.primaryImage!],
                       borderRadius: BorderRadius.circular(12),
                       background: const Color(0xFFF7F9FC),
                     ),
@@ -805,10 +846,62 @@ class _AddButtonState extends ConsumerState<_AddButton> {
 void _showQuickView(BuildContext context, WidgetRef ref, ProductSummary product) {
   showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     backgroundColor: AppPallete.surface,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-    builder: (context) => Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+    ),
+    builder: (_) => _QuickViewSheet(product: product),
+  );
+}
+
+List<String> _quickViewUrls(ProductSummary product, ProductDetail? detail) {
+  final seen = <String>{};
+  final urls = <String>[];
+  void add(String? raw) {
+    final url = (raw ?? '').trim();
+    if (url.isEmpty || !seen.add(url)) return;
+    urls.add(url);
+  }
+
+  if (detail != null) {
+    // Include every product / variant photo so Quick View can cycle colors.
+    for (final image in detail.images) {
+      add(image.image);
+    }
+    add(detail.summary.primaryImage);
+  }
+  add(product.primaryImage);
+  return urls;
+}
+
+/// Quick View sheet: loads the full gallery, then auto-cycles when there are multiple photos.
+class _QuickViewSheet extends ConsumerStatefulWidget {
+  const _QuickViewSheet({required this.product});
+
+  final ProductSummary product;
+
+  @override
+  ConsumerState<_QuickViewSheet> createState() => _QuickViewSheetState();
+}
+
+class _QuickViewSheetState extends ConsumerState<_QuickViewSheet> {
+  @override
+  void initState() {
+    super.initState();
+    // Warm the detail cache as soon as the sheet opens.
+    Future.microtask(
+      () => ref.read(productDetailProvider(widget.product.slug).future),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(productDetailProvider(widget.product.slug));
+    final urls = _quickViewUrls(widget.product, async.valueOrNull);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 20 + MediaQuery.paddingOf(context).bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -817,29 +910,210 @@ void _showQuickView(BuildContext context, WidgetRef ref, ProductSummary product)
             child: Container(
               width: 36,
               height: 4,
-              decoration: BoxDecoration(color: AppPallete.divider, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                color: AppPallete.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          AspectRatio(
-            aspectRatio: 1.4,
-            child: AppNetworkImage(url: product.primaryImage, borderRadius: BorderRadius.circular(12)),
+          _QuickViewCarousel(
+            key: ValueKey(urls.join('|')),
+            urls: urls,
           ),
           const SizedBox(height: 12),
-          Text(product.name, style: AppTypography.titleMedium),
-          if (product.sku.isNotEmpty) Text(product.sku, style: AppTypography.bodySmall),
-          if (product.shortDescription.isNotEmpty) ...[
+          Text(widget.product.name, style: AppTypography.titleMedium),
+          if (widget.product.sku.isNotEmpty)
+            Text(widget.product.sku, style: AppTypography.bodySmall),
+          if (widget.product.shortDescription.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(product.shortDescription, style: AppTypography.bodyLarge),
+            Text(widget.product.shortDescription, style: AppTypography.bodyLarge),
           ],
           const SizedBox(height: 8),
-          Text(Formatters.money(product.price), style: AppTypography.price.copyWith(color: AppPallete.ink)),
+          Text(
+            Formatters.money(widget.product.price),
+            style: AppTypography.price.copyWith(color: AppPallete.ink),
+          ),
           const SizedBox(height: 12),
-          _AddButton(product: product),
+          _AddButton(product: widget.product),
         ],
       ),
-    ),
+    );
+  }
+}
+
+/// Autoplaying product gallery for Quick View. Single image stays static.
+class _QuickViewCarousel extends StatefulWidget {
+  const _QuickViewCarousel({super.key, required this.urls});
+
+  final List<String> urls;
+
+  static const autoplayInterval = Duration(milliseconds: 2800);
+  static const _loopSpan = 10000;
+  static const _radius = 12.0;
+
+  @override
+  State<_QuickViewCarousel> createState() => _QuickViewCarouselState();
+}
+
+class _QuickViewCarouselState extends State<_QuickViewCarousel> {
+  late final PageController _controller = PageController(
+    initialPage: _startPage,
+    viewportFraction: widget.urls.length > 1 ? 0.92 : 1,
   );
+  late int _page = _startPage;
+  Timer? _timer;
+  var _touching = false;
+
+  int get _count => widget.urls.length;
+  int get _index => _count == 0 ? 0 : _page % _count;
+  int get _startPage =>
+      _count <= 1 ? 0 : _QuickViewCarousel._loopSpan ~/ 2 - (_QuickViewCarousel._loopSpan ~/ 2) % _count;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (!mounted || _count < 2 || Motion.reduced(context)) return;
+    _timer = Timer.periodic(_QuickViewCarousel.autoplayInterval, (_) {
+      if (mounted && !_touching) _go(1);
+    });
+  }
+
+  void _syncTimer() {
+    if (!mounted) return;
+    if (_touching || _count < 2 || Motion.reduced(context)) {
+      _timer?.cancel();
+      _timer = null;
+      return;
+    }
+    if (_timer == null) _startTimer();
+  }
+
+  void _go(int delta) {
+    if (!mounted || !_controller.hasClients || _count < 2) return;
+    final current = _controller.page?.round() ?? _page;
+    _controller.animateToPage(
+      current + delta,
+      duration: Motion.of(context, const Duration(milliseconds: 620)),
+      curve: Motion.emphasized,
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_count == 0) {
+      return AspectRatio(
+        aspectRatio: 1,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(_QuickViewCarousel._radius),
+          ),
+          child: const Center(
+            child: Icon(PhosphorIconsLight.image, color: AppPallete.textHint),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: 1,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification) {
+                _touching = true;
+                _syncTimer();
+              } else if (notification is ScrollEndNotification) {
+                _touching = false;
+                _syncTimer();
+              }
+              return false;
+            },
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: _count == 1 ? 1 : _QuickViewCarousel._loopSpan,
+              onPageChanged: (page) => setState(() => _page = page),
+              itemBuilder: (context, page) {
+                final url = widget.urls[page % _count];
+                return AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    var scale = 1.0;
+                    if (_count > 1 &&
+                        _controller.hasClients &&
+                        _controller.position.haveDimensions) {
+                      final delta =
+                          ((_controller.page ?? page.toDouble()) - page).abs().clamp(0.0, 1.0);
+                      scale = 1 - (delta * 0.06);
+                    }
+                    return Transform.scale(scale: scale, child: child);
+                  },
+                  child: Pressable(
+                    semanticLabel: 'View full image',
+                    onTap: () => openFullscreenImages(
+                      context,
+                      urls: widget.urls,
+                      initial: page % _count,
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F9FC),
+                        borderRadius: BorderRadius.circular(_QuickViewCarousel._radius),
+                      ),
+                      child: AppNetworkImage(
+                        url: url,
+                        fit: BoxFit.contain,
+                        borderRadius: BorderRadius.circular(_QuickViewCarousel._radius),
+                        background: Colors.transparent,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (_count > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: AnimatedSmoothIndicator(
+              activeIndex: _index,
+              count: _count,
+              duration: Motion.of(context, Motion.medium),
+              curve: Motion.emphasized,
+              onDotClicked: (index) {
+                _go(index - _index);
+                _startTimer();
+              },
+              effect: const ExpandingDotsEffect(
+                dotWidth: 6,
+                dotHeight: 6,
+                expansionFactor: 2.4,
+                spacing: 5,
+                radius: 3,
+                activeDotColor: Color(0xFFFA8726),
+                dotColor: AppPallete.dotInactive,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _FilterSheet extends StatefulWidget {

@@ -123,15 +123,18 @@ class HelpThread {
     required this.profile,
     required this.messages,
     required this.agentOnline,
+    this.customerUnread = 0,
   });
 
   final HelpProfile profile;
   final List<HelpMessage> messages;
   final bool agentOnline;
+  final int customerUnread;
 
   factory HelpThread.fromJson(Json json) => HelpThread(
     profile: HelpProfile.fromJson(json.obj('profile') ?? const {}),
     messages: json.listOf('messages', HelpMessage.fromJson),
     agentOnline: json.boolean('agent_online'),
+    customerUnread: json.integer('customer_unread'),
   );
 }

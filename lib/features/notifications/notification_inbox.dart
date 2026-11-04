@@ -9,7 +9,7 @@ import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/features/notifications/notification_repository.dart';
 
 /// Where a notification opens when it has no order id.
-enum NotificationLink { orders, products, wishlist, account }
+enum NotificationLink { orders, products, wishlist, account, help }
 
 enum InboxChannel { orders, offers, account, system }
 
@@ -137,6 +137,22 @@ class NotificationInbox extends Notifier<InboxState> {
 
   void setUnreadCount(int count) => state = state.copyWith(unreadCount: count);
 
+  /// Drop local support.reply rows after the Help chat marks them read on the server.
+  void clearSupportReplies() {
+    final pending = [
+      for (final item in state.items)
+        if (item.unread && item.link == NotificationLink.help) item.id,
+    ];
+    if (pending.isEmpty) return;
+    state = state.copyWith(
+      items: [
+        for (final item in state.items)
+          pending.contains(item.id) ? item.copyWith(unread: false) : item,
+      ],
+      unreadCount: (state.unreadCount - pending.length).clamp(0, 1 << 30),
+    );
+  }
+
   Future<void> markRead(Iterable<String> ids) async {
     final pending = {
       for (final item in state.items)
@@ -240,12 +256,14 @@ InboxChannel _channel(String kind) {
     return InboxChannel.offers;
   }
   if (kind.startsWith('account.')) return InboxChannel.account;
+  if (kind.startsWith('support.')) return InboxChannel.account;
   return InboxChannel.system;
 }
 
 InboxIcon _icon(String kind) => switch (kind) {
       'order.shipped' || 'order.out_for_delivery' || 'order.delivered' => InboxIcon.truck,
       'payment.paid' || 'payment.failed' || 'refund.requested' || 'refund.completed' => InboxIcon.clipboard,
+      'support.reply' => InboxIcon.megaphone,
       _ when kind.startsWith('offer.') || kind.startsWith('promo.') => InboxIcon.tag,
       _ when kind.startsWith('price.') => InboxIcon.heart,
       _ when kind.startsWith('arrival.') => InboxIcon.star,
@@ -258,6 +276,7 @@ NotificationLink _link(Object? target) => switch (target) {
       'products' => NotificationLink.products,
       'wishlist' => NotificationLink.wishlist,
       'account' => NotificationLink.account,
+      'support' => NotificationLink.help,
       _ => NotificationLink.orders,
     };
 

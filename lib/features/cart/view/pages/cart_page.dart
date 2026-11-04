@@ -51,11 +51,36 @@ class _CartPageState extends ConsumerState<CartPage> {
   String? _couponCode;
   String _discount = '0';
   String? _pricedFor;
+  String? _pendingCoupon;
+  String? _handledCouponQuery;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final raw = GoRouterState.of(context).uri.queryParameters['coupon']?.trim();
+    final code = (raw == null || raw.isEmpty) ? null : raw.toUpperCase();
+    if (code == null || code == _handledCouponQuery) return;
+    _handledCouponQuery = code;
+    _pendingCoupon = code;
+  }
 
   @override
   void dispose() {
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Applies a deep-linked coupon once the cart has a usable subtotal.
+  void _applyPendingCoupon(String subtotal) {
+    final code = _pendingCoupon;
+    if (code == null || code.isEmpty) return;
+    _pendingCoupon = null;
+    if (_couponCode == code && _pricedFor == subtotal) return;
+    setState(() {
+      _couponCode = code;
+      _discount = '0';
+    });
+    _reprice(code, subtotal);
   }
 
   /// New lines start selected. Lines the server dropped leave the selection.
@@ -234,6 +259,11 @@ class _CartPageState extends ConsumerState<CartPage> {
         : Formatters.decimal(cart.deliveryInsideDhaka);
     final total = itemsTotal - discount + delivery;
     final subtotalText = itemsTotal.toString();
+    if (_pendingCoupon != null && selected.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _applyPendingCoupon(subtotalText);
+      });
+    }
     final code = _couponCode;
     if (code != null && _pricedFor != subtotalText) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

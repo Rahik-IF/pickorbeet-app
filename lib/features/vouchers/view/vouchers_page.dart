@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -15,19 +16,21 @@ import 'package:pickorbeet/core/widgets/brand_lockup.dart';
 import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/core/widgets/header_background.dart';
 import 'package:pickorbeet/core/widgets/search_pill.dart';
+import 'package:pickorbeet/core/widgets/state_views.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/vouchers/model/store_voucher.dart';
+import 'package:pickorbeet/features/vouchers/repositories/vouchers_repository.dart';
 import 'package:pickorbeet/features/vouchers/view/voucher_card.dart';
 
 /// My Vouchers, matching the offer-wallet design: banner, filter chips, and ticket cards.
-class VouchersPage extends StatefulWidget {
+class VouchersPage extends ConsumerStatefulWidget {
   const VouchersPage({super.key});
 
   @override
-  State<VouchersPage> createState() => _VouchersPageState();
+  ConsumerState<VouchersPage> createState() => _VouchersPageState();
 }
 
-class _VouchersPageState extends State<VouchersPage> {
+class _VouchersPageState extends ConsumerState<VouchersPage> {
   static const _page = Color(0xFFF4F7FE);
 
   VoucherFilter _filter = VoucherFilter.all;
@@ -39,10 +42,10 @@ class _VouchersPageState extends State<VouchersPage> {
   }
 
   void _use(StoreVoucher voucher) {
-    showToast(context, 'Use ${voucher.code} at checkout', kind: ToastKind.success);
+    showToast(context, 'Applying ${voucher.code}', kind: ToastKind.success);
     Future<void>.delayed(const Duration(milliseconds: 700), () {
       if (!mounted) return;
-      context.go(Routes.cart);
+      context.go(Routes.cartWithCoupon(voucher.code));
     });
   }
 
@@ -57,40 +60,63 @@ class _VouchersPageState extends State<VouchersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final vouchers = vouchersFor(_filter);
+    final async = ref.watch(vouchersProvider);
     return Scaffold(
       backgroundColor: _page,
       body: Column(
         children: [
           const _VoucherHeader(),
           Expanded(
-            child: ListView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(13, 12, 13, 24),
-              children: [
-                const _Hero().entrance(rise: 10),
-                const SizedBox(height: 12),
-                _Filters(selected: _filter, onSelect: _select).entrance(index: 1, rise: 8),
-                const SizedBox(height: 12),
-                AnimatedSize(
-                  duration: Motion.of(context, Motion.medium),
-                  curve: Motion.emphasizedDecelerate,
-                  alignment: Alignment.topCenter,
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < vouchers.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 10),
-                        VoucherCard(
-                          key: ValueKey('${_filter.name}-${vouchers[i].id}'),
-                          voucher: vouchers[i],
-                          onUse: () => _use(vouchers[i]),
-                          onTerms: () => _terms(vouchers[i]),
-                        ).entrance(index: i, rise: 12),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+            child: async.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => ErrorState(
+                failure: error,
+                onRetry: () => ref.invalidate(vouchersProvider),
+              ),
+              data: (all) {
+                final vouchers = vouchersFor(all, _filter);
+                return ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(13, 12, 13, 24),
+                  children: [
+                    const _Hero().entrance(rise: 10),
+                    const SizedBox(height: 12),
+                    _Filters(
+                      selected: _filter,
+                      vouchers: all,
+                      onSelect: _select,
+                    ).entrance(index: 1, rise: 8),
+                    const SizedBox(height: 12),
+                    if (vouchers.isEmpty)
+                      EmptyState(
+                        title: 'No vouchers yet',
+                        message: _filter == VoucherFilter.all
+                            ? 'When a coupon is published, it will show up here.'
+                            : 'Nothing in ${_filter.name} right now.',
+                        icon: PhosphorIconsRegular.ticket,
+                      )
+                    else
+                      AnimatedSize(
+                        duration: Motion.of(context, Motion.medium),
+                        curve: Motion.emphasizedDecelerate,
+                        alignment: Alignment.topCenter,
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < vouchers.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 10),
+                              VoucherCard(
+                                key: ValueKey('${_filter.name}-${vouchers[i].id}'),
+                                voucher: vouchers[i],
+                                onUse: () => _use(vouchers[i]),
+                                onTerms: () => _terms(vouchers[i]),
+                              ).entrance(index: i, rise: 12),
+                            ],
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -398,9 +424,14 @@ class _Confetti extends StatelessWidget {
 }
 
 class _Filters extends StatelessWidget {
-  const _Filters({required this.selected, required this.onSelect});
+  const _Filters({
+    required this.selected,
+    required this.vouchers,
+    required this.onSelect,
+  });
 
   final VoucherFilter selected;
+  final List<StoreVoucher> vouchers;
   final ValueChanged<VoucherFilter> onSelect;
 
   @override
@@ -414,7 +445,7 @@ class _Filters extends StatelessWidget {
             if (filter != VoucherFilter.all) const SizedBox(width: 8),
             _FilterChip(
               filter: filter,
-              count: voucherCount(filter),
+              count: voucherCount(vouchers, filter),
               selected: filter == selected,
               onTap: () => onSelect(filter),
             ),

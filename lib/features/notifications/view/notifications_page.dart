@@ -87,6 +87,10 @@ class _InboxState extends ConsumerState<_Inbox> {
 
   void _open(InboxItem item) {
     unawaited(ref.read(notificationInboxProvider.notifier).markRead([item.id]));
+    if (item.link == NotificationLink.help) {
+      context.push(Routes.help);
+      return;
+    }
     final orderId = item.orderId;
     if (orderId != null && orderId.isNotEmpty) {
       context.push(Routes.order(orderId));
@@ -101,6 +105,8 @@ class _InboxState extends ConsumerState<_Inbox> {
         context.go(Routes.wishlist);
       case NotificationLink.account:
         context.go(Routes.account);
+      case NotificationLink.help:
+        context.push(Routes.help);
     }
   }
 

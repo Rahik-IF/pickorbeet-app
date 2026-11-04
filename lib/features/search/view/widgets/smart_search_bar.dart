@@ -61,7 +61,15 @@ class SmartSearchBar extends StatelessWidget {
                           ),
                           decoration: InputDecoration(
                             isCollapsed: true,
+                            // Theme still supplies focused/enabled outlines unless all are cleared.
                             border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding: EdgeInsets.zero,
                             hintText: 'Search products, brands...',
                             hintStyle: AppTypography.bodyLarge.copyWith(fontSize: 14, color: colors.muted),
                           ),

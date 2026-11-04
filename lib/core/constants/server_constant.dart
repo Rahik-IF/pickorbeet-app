@@ -4,9 +4,13 @@ import 'package:flutter/foundation.dart';
 
 /// Where the Django API lives.
 ///
-/// Release builds call the live API. Debug builds use the local Django server: Android emulators
-/// use the host alias `10.0.2.2`, and everything else uses `127.0.0.1`.
-/// Pass `--dart-define=API_ORIGIN=http://192.168.0.10:8000` to point any build somewhere else.
+/// Prefer the Make targets from the monorepo root:
+/// `make run app` (live) and `make run app local` (local Django).
+/// Those pass `--dart-define=API_ORIGIN=...`.
+///
+/// Without an override, release builds call the live API. Debug builds use the
+/// local Django server: Android emulators use `10.0.2.2`, everything else uses
+/// `127.0.0.1`.
 abstract final class ServerConstant {
   static const liveOrigin = 'https://admin.pickorbeet.com';
   static const _originOverride = String.fromEnvironment('API_ORIGIN');

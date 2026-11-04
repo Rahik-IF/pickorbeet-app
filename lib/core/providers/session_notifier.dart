@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:pickorbeet/core/failure/failure.dart';
 import 'package:pickorbeet/core/providers/cart_notifier.dart';
@@ -43,15 +44,12 @@ class SessionNotifier extends _$SessionNotifier {
     }
   }
 
-  /// Saves the session, moves the guest's cart onto the account, and loads the full profile.
+  /// Saves tokens and marks the session signed-in. Cart merge must happen outside this notifier
+  /// (see [completeSignIn]) — CartNotifier watches session, so reading cart here cycles in debug.
   Future<void> signIn(AuthSession session) async {
-    final guestLines = state == SessionStatus.guest
-        ? (ref.read(cartNotifierProvider).valueOrNull?.items.map(CartLine.of).toList() ?? const <CartLine>[])
-        : const <CartLine>[];
     await ref.read(authLocalRepositoryProvider).saveSession(session.access, session.refresh);
     ref.read(currentUserNotifierProvider.notifier).setUser(session.user);
     state = SessionStatus.signedIn;
-    await ref.read(cartNotifierProvider.notifier).mergeGuestLines(guestLines);
     unawaited(refreshProfile());
   }
 
@@ -73,5 +71,20 @@ class SessionNotifier extends _$SessionNotifier {
   void _expire() {
     ref.read(currentUserNotifierProvider.notifier).clear();
     state = SessionStatus.guest;
+  }
+}
+
+/// Captures guest cart lines, signs in, then merges. Safe from UI / non-session providers.
+Future<void> completeSignIn(WidgetRef ref, AuthSession session) async {
+  final wasGuest = ref.read(sessionNotifierProvider) == SessionStatus.guest;
+  final guestLines = wasGuest
+      ? (ref.read(cartNotifierProvider).valueOrNull?.items.map(CartLine.of).toList() ?? const <CartLine>[])
+      : const <CartLine>[];
+  await ref.read(sessionNotifierProvider.notifier).signIn(session);
+  if (guestLines.isEmpty) return;
+  try {
+    await ref.read(cartNotifierProvider.notifier).mergeGuestLines(guestLines);
+  } on Object {
+    // Session is already saved; cart can reload on the next visit.
   }
 }

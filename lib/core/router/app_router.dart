@@ -244,8 +244,15 @@ String? _heroTag(Object? extra) => extra is String ? extra : null;
 
 ProductListPage _productList(GoRouterState state) {
   final params = state.uri.queryParameters;
+  final extra = state.extra;
+  final bannerImage = extra is String && extra.isNotEmpty
+      ? extra
+      : (extra is Map && extra['bannerImage'] is String
+          ? extra['bannerImage'] as String
+          : null);
   return ProductListPage(
     title: params['title'],
+    bannerImage: bannerImage,
     query: ProductQuery(
       categorySlug: params['category'],
       subcategorySlug: params['subcategory'],

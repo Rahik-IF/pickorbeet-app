@@ -7,6 +7,14 @@ abstract final class Routes {
   static const account = '/account';
   static const cart = '/cart';
 
+  /// Opens the cart and asks it to validate [code] against the current subtotal.
+  static String cartWithCoupon(String code) {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) return cart;
+    return Uri(path: cart, queryParameters: {'coupon': trimmed}).toString();
+  }
+
+
   // Catalog
   static const search = '/search';
   static const products = '/products';

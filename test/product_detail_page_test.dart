@@ -1,12 +1,17 @@
+import 'package:cookie_jar/cookie_jar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart';
+import 'package:http/http.dart' as http;
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:pickorbeet/core/failure/failure.dart';
+import 'package:pickorbeet/core/network/api_client.dart';
 import 'package:pickorbeet/core/providers/cart_notifier.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
+import 'package:pickorbeet/core/providers/session_notifier.dart';
 import 'package:pickorbeet/core/theme/theme.dart';
+import 'package:pickorbeet/features/auth/repositories/auth_local_repository.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/repositories/catalog_repository.dart';
@@ -40,6 +45,11 @@ void main() {
       'warranty_period': '1 year',
       'size': 'Adjustable',
       'material': 'Aluminium',
+      'specifications': [
+        {'id': 's1', 'name': 'Brand', 'value': 'Haylou', 'sort_order': 0},
+        {'id': 's2', 'name': 'Battery', 'value': ' ', 'sort_order': 1},
+        {'id': 's3', 'name': 'Display', 'value': '1.78" AMOLED', 'sort_order': 2},
+      ],
       'category': {'id': 'c', 'name': 'Watches', 'slug': 'watches'},
       'subcategory': {'id': 's', 'name': 'Smart', 'slug': 'smart'},
       'images': [
@@ -95,7 +105,39 @@ void main() {
     expect(detail.plainDescription, 'Light watch');
     expect(detail.summary.variants.single.isLowStock, isTrue);
     expect(detail.summary.variants.single.lowStockThreshold, 10);
-    expect(detail.specs, contains(('Material', 'Aluminium')));
+    expect(detail.specifications, hasLength(2));
+    expect(
+      detail.specs,
+      [
+        ('Brand', 'Haylou'),
+        ('Display', '1.78" AMOLED'),
+      ],
+    );
+    expect(detail.specs, isNot(contains(('Material', 'Aluminium'))));
+  });
+
+  test('product detail falls back to basic fields when specifications are empty', () {
+    final detail = ProductDetail.fromMap({
+      'id': '1',
+      'name': 'Haylou RS4',
+      'slug': 'haylou-rs4',
+      'sku': 'HY-RS4',
+      'price': '1890.00',
+      'size': 'Adjustable',
+      'color': 'Black',
+      'material': 'Aluminium',
+      'category': {'id': 'c', 'name': 'Watches', 'slug': 'watches'},
+    });
+
+    expect(
+      detail.specs,
+      [
+        ('Product code', 'HY-RS4'),
+        ('Color', 'Black'),
+        ('Size', 'Adjustable'),
+        ('Material', 'Aluminium'),
+      ],
+    );
   });
 
   test('plain description drops scripts and keeps list items', () {
@@ -155,8 +197,12 @@ void main() {
     expect(find.text('Warranty'), findsNothing);
     expect(find.text('Heart rate and sleep tracking'), findsOneWidget);
     expect(find.text('A light smartwatch for daily wear.'), findsOneWidget);
-    expect(find.text('Aluminium'), findsOneWidget);
-    expect(find.text('HY-RS4'), findsOneWidget);
+    expect(find.text('Product details'), findsOneWidget);
+    expect(find.text('Description'), findsOneWidget);
+    expect(find.text('Specs (2)'), findsOneWidget);
+    expect(find.text('Delivery'), findsOneWidget);
+    expect(find.text('Reviews (0)'), findsOneWidget);
+    expect(find.textContaining('HY-RS4'), findsOneWidget);
     expect(find.text('৳1,890'), findsOneWidget);
     expect(find.text('In stock'), findsOneWidget);
     expect(find.textContaining('Color:'), findsOneWidget);
@@ -172,27 +218,31 @@ void main() {
     expect(find.text('Write a review'), findsOneWidget);
     expect(find.textContaining('You save'), findsOneWidget);
     expect(find.text('Ready to ship'), findsOneWidget);
-    expect(find.text('Check delivery availability'), findsOneWidget);
-    expect(find.text('Cash on Delivery'), findsOneWidget);
+    expect(find.text('Check delivery availability'), findsNothing);
     expect(find.text('Add to Cart'), findsOneWidget);
     expect(find.text('Buy Now'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Check'));
-    await tester.pump();
-    expect(find.text('Enter an area or postal code'), findsOneWidget);
+    await tester.ensureVisible(find.text('Specs (2)'));
+    await tester.tap(find.text('Specs (2)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Product code'), findsOneWidget);
+    expect(find.text('Material'), findsOneWidget);
+    expect(find.text('Aluminium'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), 'Mirpur');
-    await tester.tap(find.text('Check'));
-    await tester.pump();
-    expect(find.textContaining('Inside Dhaka'), findsOneWidget);
-    expect(find.textContaining('৳60'), findsOneWidget);
+    await tester.tap(find.text('Delivery'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Delivery is available across Bangladesh'),
+      findsOneWidget,
+    );
 
-    await tester.enterText(find.byType(TextField), 'Sylhet');
-    await tester.tap(find.text('Check'));
+    await tester.ensureVisible(find.text('Reviews (0)'));
+    await tester.tap(find.text('Reviews (0)'));
     await tester.pump();
-    expect(find.textContaining('Outside Dhaka'), findsOneWidget);
-    expect(find.textContaining('৳120'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.textContaining('No reviews yet'), findsOneWidget);
+    expect(find.text('With photos'), findsOneWidget);
 
     await tester.tap(find.text('Add to Cart'));
     await tester.pump();
@@ -300,7 +350,7 @@ void main() {
 
     expect(find.text('128GB'), findsOneWidget);
     expect(find.textContaining('Storage:'), findsOneWidget);
-    expect(find.textContaining('Midnight'), findsOneWidget);
+    expect(find.textContaining('Midnight'), findsWidgets);
     expect(
       find.byWidgetPredicate(
         (widget) =>
@@ -387,6 +437,8 @@ Future<void> _show(
           businessHours: '',
         )),
         cartNotifierProvider.overrideWith(_RecordingCart.new),
+        sessionNotifierProvider.overrideWith(_GuestSession.new),
+        catalogRepositoryProvider.overrideWithValue(_FakeCatalog()),
         productDetailProvider(
           detail.summary.slug,
         ).overrideWith((ref) async => detail),
@@ -419,4 +471,45 @@ class _RecordingCart extends CartNotifier {
     lastAdded = line;
     return const Right(CartModel.empty);
   }
+}
+
+class _GuestSession extends SessionNotifier {
+  @override
+  SessionStatus build() => SessionStatus.guest;
+}
+
+class _FakeCatalog extends CatalogRepository {
+  _FakeCatalog()
+      : super(
+          ApiClient(
+            client: http.Client(),
+            tokens: AuthLocalRepository(),
+            cookies: CookieJar(),
+          ),
+        );
+
+  @override
+  Future<Either<AppFailure, ProductReviewsPayload>> reviews(
+    String slug, [
+    ProductReviewsQuery query = const ProductReviewsQuery(),
+  ]) async =>
+      const Right(
+        ProductReviewsPayload(
+          average: null,
+          count: 0,
+          filteredCount: 0,
+          ratingBreakdown: {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
+          canReview: false,
+          results: [],
+        ),
+      );
+
+  @override
+  Future<Either<AppFailure, bool>> saveReview(
+    String slug, {
+    required int rating,
+    required String comment,
+    List<({String filename, List<int> bytes})> images = const [],
+  }) async =>
+      const Right(true);
 }

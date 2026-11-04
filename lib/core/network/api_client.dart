@@ -74,14 +74,18 @@ class ApiClient {
     required String fileField,
     required String filename,
     required List<int> bytes,
-  }) => _upload(
-    'POST',
+  }) => postFiles(
     path,
     fields: fields,
-    fileField: fileField,
-    filename: filename,
-    bytes: bytes,
+    files: [(field: fileField, filename: filename, bytes: bytes)],
   );
+
+  /// Multipart POST with one or more files (same or different field names).
+  Future<http.Response> postFiles(
+    String path, {
+    Map<String, String> fields = const {},
+    required List<({String field, String filename, List<int> bytes})> files,
+  }) => _upload('POST', path, fields: fields, files: files);
 
   /// Multipart PATCH. The profile photo is sent with the text fields in one request.
   Future<http.Response> patchFile(
@@ -94,9 +98,7 @@ class ApiClient {
     'PATCH',
     path,
     fields: fields,
-    fileField: fileField,
-    filename: filename,
-    bytes: bytes,
+    files: [(field: fileField, filename: filename, bytes: bytes)],
     timeout: const Duration(seconds: 45),
   );
 
@@ -104,9 +106,7 @@ class ApiClient {
     String method,
     String path, {
     required Map<String, String> fields,
-    required String fileField,
-    required String filename,
-    required List<int> bytes,
+    required List<({String field, String filename, List<int> bytes})> files,
     Duration? timeout,
   }) async {
     final target = uri(path);
@@ -115,9 +115,7 @@ class ApiClient {
       method,
       target,
       fields,
-      fileField,
-      filename,
-      bytes,
+      files,
       access,
       timeout,
     );
@@ -130,9 +128,7 @@ class ApiClient {
           method,
           target,
           fields,
-          fileField,
-          filename,
-          bytes,
+          files,
           _tokens.getAccessToken(),
           timeout,
         );
@@ -141,9 +137,7 @@ class ApiClient {
           method,
           target,
           fields,
-          fileField,
-          filename,
-          bytes,
+          files,
           null,
           timeout,
         );
@@ -280,9 +274,7 @@ class ApiClient {
     String method,
     Uri target,
     Map<String, String> fields,
-    String fileField,
-    String filename,
-    List<int> bytes,
+    List<({String field, String filename, List<int> bytes})> files,
     String? access,
     Duration? timeout,
   ) async {
@@ -290,10 +282,17 @@ class ApiClient {
     final request = http.MultipartRequest(method, target)
       ..followRedirects = false
       ..fields.addAll(fields)
-      ..files.add(
-        http.MultipartFile.fromBytes(fileField, bytes, filename: filename),
-      )
-      ..headers[HttpHeaders.acceptHeader] = 'application/json';
+      ..headers[HttpHeaders.acceptHeader] = 'application/json'
+      ..headers['X-Client-Platform'] = 'app';
+    for (final file in files) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          file.field,
+          file.bytes,
+          filename: file.filename,
+        ),
+      );
+    }
     if (access != null) {
       request.headers[HttpHeaders.authorizationHeader] = 'Bearer $access';
     }
@@ -319,6 +318,7 @@ class ApiClient {
       ..followRedirects = false
       ..headers.addAll({
         HttpHeaders.acceptHeader: 'application/json',
+        'X-Client-Platform': 'app',
         if (body != null)
           HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
         if (access != null) HttpHeaders.authorizationHeader: 'Bearer $access',

@@ -12,9 +12,11 @@ import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/brand_lockup.dart';
+import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/repositories/catalog_repository.dart';
 import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
+import 'package:pickorbeet/features/support/help_unread.dart';
 
 /// The home header's menu: shortcuts, every category, and how to reach the store.
 Future<void> showHomeMenu(BuildContext context) => showModalBottomSheet<void>(
@@ -34,17 +36,18 @@ class _HomeMenu extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
     final settings = ref.watch(storeSettingsProvider).valueOrNull;
+    final helpUnread = ref.watch(helpUnreadProvider);
 
     void go(String location) {
       Navigator.of(context).pop();
       context.push(location);
     }
 
-    final shortcuts = <(IconData, String, String, TileTint)>[
-      (PhosphorIconsBold.package, 'Track Order', Routes.trackOrder, DashboardPalette.orders),
-      (PhosphorIconsBold.receipt, 'My Orders', Routes.orders, DashboardPalette.addresses),
-      (PhosphorIconsBold.heart, 'Wishlist', Routes.wishlist, DashboardPalette.wishlist),
-      (PhosphorIconsBold.headset, 'Help', Routes.help, DashboardPalette.help),
+    final shortcuts = <(IconData, String, String, TileTint, int)>[
+      (PhosphorIconsBold.package, 'Track Order', Routes.trackOrder, DashboardPalette.orders, 0),
+      (PhosphorIconsBold.receipt, 'My Orders', Routes.orders, DashboardPalette.addresses, 0),
+      (PhosphorIconsBold.heart, 'Wishlist', Routes.wishlist, DashboardPalette.wishlist, 0),
+      (PhosphorIconsBold.headset, 'Help', Routes.help, DashboardPalette.help, helpUnread),
     ];
 
     return DraggableScrollableSheet(
@@ -71,6 +74,7 @@ class _HomeMenu extends ConsumerWidget {
                     icon: shortcuts[i].$1,
                     label: shortcuts[i].$2,
                     tint: shortcuts[i].$4,
+                    badge: shortcuts[i].$5,
                     onTap: () => go(shortcuts[i].$3),
                   ).entrance(index: i),
                 ),
@@ -107,24 +111,42 @@ class _HomeMenu extends ConsumerWidget {
 }
 
 class _Shortcut extends StatelessWidget {
-  const _Shortcut({required this.icon, required this.label, required this.tint, required this.onTap});
+  const _Shortcut({
+    required this.icon,
+    required this.label,
+    required this.tint,
+    required this.onTap,
+    this.badge = 0,
+  });
 
   final IconData icon;
   final String label;
   final TileTint tint;
   final VoidCallback onTap;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
-      semanticLabel: label,
+      semanticLabel: badge > 0 ? '$label, $badge unread' : label,
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(color: tint.background, borderRadius: AppRadii.xlBorder),
         child: Column(
           children: [
-            Icon(icon, size: 22, color: tint.icon),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, size: 22, color: tint.icon),
+                if (badge > 0)
+                  Positioned(
+                    top: -6,
+                    right: -10,
+                    child: CountBadge(count: badge, size: 14),
+                  ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(
               label,

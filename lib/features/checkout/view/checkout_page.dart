@@ -19,6 +19,7 @@ import 'package:pickorbeet/core/widgets/app_button.dart';
 import 'package:pickorbeet/core/widgets/state_views.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/account/repositories/address_repository.dart';
+import 'package:pickorbeet/features/account/view/widgets/bd_address_cascade.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/cart/repositories/cart_remote_repository.dart';
 import 'package:pickorbeet/features/checkout/checkout_args.dart';
@@ -42,9 +43,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   final _phone = TextEditingController();
   final _line1 = TextEditingController();
   final _line2 = TextEditingController();
-  final _city = TextEditingController();
-  final _district = TextEditingController();
-  final _postal = TextEditingController();
+  var _division = '';
+  var _district = '';
+  var _postOffice = '';
+  var _postal = '';
+  var _city = '';
 
   String? _selectedId;
   CheckoutPayment _payment = CheckoutPayment.cod;
@@ -61,30 +64,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     super.initState();
     final code = widget.args.couponCode?.trim();
     _coupon = code == null || code.isEmpty ? null : code;
-    for (final controller in [
-      _name,
-      _phone,
-      _line1,
-      _line2,
-      _city,
-      _district,
-      _postal,
-    ]) {
+    for (final controller in [_name, _phone, _line1, _line2]) {
       controller.addListener(_onGuestEdit);
     }
   }
 
   @override
   void dispose() {
-    for (final controller in [
-      _name,
-      _phone,
-      _line1,
-      _line2,
-      _city,
-      _district,
-      _postal,
-    ]) {
+    for (final controller in [_name, _phone, _line1, _line2]) {
       controller.removeListener(_onGuestEdit);
       controller.dispose();
     }
@@ -98,10 +85,16 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   bool _insideDhaka({required bool signedIn, required AddressModel? selected}) {
     if (signedIn) {
       if (selected == null) return true;
-      return shipsInsideDhaka(city: selected.city, district: selected.district);
+      return shipsInsideDhaka(
+        city: selected.city,
+        district: selected.district,
+        division: selected.division,
+      );
     }
-    if (_city.text.trim().isEmpty && _district.text.trim().isEmpty) return true;
-    return shipsInsideDhaka(city: _city.text, district: _district.text);
+    if (_city.trim().isEmpty && _district.trim().isEmpty && _division.trim().isEmpty) {
+      return true;
+    }
+    return shipsInsideDhaka(city: _city, district: _district, division: _division);
   }
 
   List<CartItemModel> _linesOf(CartModel cart) {
@@ -211,10 +204,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (_line1.text.trim().isEmpty) {
       errors['line1'] = 'Enter the delivery address';
     }
-    if (_city.text.trim().isEmpty) errors['city'] = 'Enter the city';
-    if (_district.text.trim().isEmpty) {
-      errors['district'] = 'Enter the district';
-    }
+    if (_division.trim().isEmpty) errors['division'] = 'Select a division';
+    if (_district.trim().isEmpty) errors['district'] = 'Select a district';
+    if (_postOffice.trim().isEmpty) errors['postOffice'] = 'Select a post office';
+    if (_city.trim().isEmpty) errors['city'] = 'Enter the city / locality';
     return errors;
   }
 
@@ -293,8 +286,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         phone: address.phone,
         line1: address.addressLine1,
         line2: address.addressLine2,
+        division: address.division,
         city: address.city,
         district: address.district,
+        postOffice: address.postOffice,
         postalCode: address.postalCode,
         couponCode: _coupon,
         itemIds: [for (final line in lines) line.id],
@@ -312,9 +307,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         phone: _phone.text,
         line1: _line1.text,
         line2: _line2.text,
-        city: _city.text,
-        district: _district.text,
-        postalCode: _postal.text,
+        division: _division,
+        city: _city,
+        district: _district,
+        postOffice: _postOffice,
+        postalCode: _postal,
         couponCode: _coupon,
         itemIds: [for (final line in lines) line.id],
         payment: _payment,
@@ -536,10 +533,27 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         phone: _phone,
         line1: _line1,
         line2: _line2,
-        city: _city,
+        division: _division,
         district: _district,
+        postOffice: _postOffice,
         postal: _postal,
+        city: _city,
         errors: errors,
+        onCascadeChanged: ({
+          String? division,
+          String? district,
+          String? postOffice,
+          String? postalCode,
+          String? city,
+        }) {
+          setState(() {
+            if (division != null) _division = division;
+            if (district != null) _district = district;
+            if (postOffice != null) _postOffice = postOffice;
+            if (postalCode != null) _postal = postalCode;
+            if (city != null) _city = city;
+          });
+        },
       );
     }
     return addresses.when(
@@ -589,23 +603,39 @@ class _GuestDeliveryForm extends StatelessWidget {
     required this.phone,
     required this.line1,
     required this.line2,
-    required this.city,
+    required this.division,
     required this.district,
+    required this.postOffice,
     required this.postal,
+    required this.city,
     required this.errors,
+    required this.onCascadeChanged,
   });
 
   final TextEditingController name;
   final TextEditingController phone;
   final TextEditingController line1;
   final TextEditingController line2;
-  final TextEditingController city;
-  final TextEditingController district;
-  final TextEditingController postal;
+  final String division;
+  final String district;
+  final String postOffice;
+  final String postal;
+  final String city;
   final Map<String, String> errors;
+  final void Function({
+    String? division,
+    String? district,
+    String? postOffice,
+    String? postalCode,
+    String? city,
+  }) onCascadeChanged;
 
   @override
   Widget build(BuildContext context) {
+    final cascadeError = errors['division'] ??
+        errors['district'] ??
+        errors['postOffice'] ??
+        errors['city'];
     return Column(
       children: [
         _GuestField(
@@ -639,39 +669,25 @@ class _GuestDeliveryForm extends StatelessWidget {
           action: TextInputAction.next,
           autofill: AutofillHints.streetAddressLine2,
         ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _GuestField(
-                label: 'City',
-                controller: city,
-                error: errors['city'],
-                action: TextInputAction.next,
-                autofill: AutofillHints.addressCity,
+        BdAddressCascade(
+          division: division,
+          district: district,
+          postOffice: postOffice,
+          postalCode: postal,
+          city: city,
+          onChanged: onCascadeChanged,
+        ),
+        if (cascadeError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                cascadeError,
+                style: AppTypography.bodySmall.copyWith(color: AppPallete.danger),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _GuestField(
-                label: 'District',
-                controller: district,
-                error: errors['district'],
-                action: TextInputAction.next,
-                autofill: AutofillHints.addressState,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _GuestField(
-          label: 'Postal code (optional)',
-          controller: postal,
-          keyboard: TextInputType.number,
-          action: TextInputAction.done,
-          autofill: AutofillHints.postalCode,
-        ),
+          ),
       ],
     );
   }

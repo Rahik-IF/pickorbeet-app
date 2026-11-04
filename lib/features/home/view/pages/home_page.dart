@@ -19,8 +19,7 @@ import 'package:pickorbeet/features/home/view/widgets/promo_banners.dart';
 import 'package:pickorbeet/features/home/view/widgets/trust_strip.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
-/// The storefront: hero banners, promos, featured categories, store promises and product rails,
-/// in the order the admin arranged them.
+/// Product-first storefront: short hero, dense product collections, then light chrome.
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -28,6 +27,9 @@ class HomePage extends ConsumerStatefulWidget {
 
   /// Side margin of every home block (design: 25 px of 841).
   static const margin = 12.2;
+
+  static const _maxHeroBanners = 3;
+  static const _maxFeaturedCategories = 1;
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -127,7 +129,6 @@ class _HomeContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final featured = ref.watch(featuredCategoriesProvider);
     final blocks = <Widget>[];
-    final widePromos = <BannerModel>[];
 
     var order = 0;
     void add(Widget block, {double gapBefore = 10.3}) {
@@ -136,39 +137,55 @@ class _HomeContent extends ConsumerWidget {
       blocks.add(block.entrance(index: order++, enabled: order <= 5));
     }
 
-    HomeSection? previous;
+    // Product-first order (not raw CMS order): hero → products → trust → 1 category → promos.
+    HeroSection? hero;
+    BenefitsSection? benefits;
+    PromoSection? promos;
+    final productSections = <ProductsSection>[];
+    var hasCategories = false;
+
     for (final section in sections) {
-      // The design's gaps depend on what sits above.
-      final gap = switch (previous) {
-        HeroSection() => 5.75,
-        PromoSection() => 13.7,
-        _ => 10.3,
-      };
       switch (section) {
-        case HeroSection(:final banners) when banners.isNotEmpty:
-          add(HeroCarousel(banners: banners), gapBefore: gap);
-        case PromoSection(:final banners) when banners.isNotEmpty:
-          add(PromoRow(banners: banners), gapBefore: gap);
-          widePromos.addAll(banners.skip(2));
+        case final HeroSection row when row.banners.isNotEmpty:
+          hero ??= row;
+        case final ProductsSection row when row.products.isNotEmpty:
+          productSections.add(row);
+        case final BenefitsSection row when row.items.isNotEmpty:
+          benefits ??= row;
         case CategoriesSection():
-          final cards = featured.valueOrNull ?? const <CategoryModel>[];
-          if (featured.isLoading && cards.isEmpty) {
-            add(const _CategoryCardSkeleton(), gapBefore: gap);
-          }
-          for (var i = 0; i < cards.length; i++) {
-            add(CategorySectionCard(category: cards[i]), gapBefore: i == 0 ? gap : 11.2);
-          }
-        case BenefitsSection(:final items) when items.isNotEmpty:
-          add(TrustStrip(items: items), gapBefore: gap);
-        case ProductsSection(:final products) when products.isNotEmpty:
-          add(ProductRail(section: section), gapBefore: gap);
+          hasCategories = true;
+        case final PromoSection row when row.banners.isNotEmpty:
+          promos ??= row;
         default:
-          continue;
+          break;
       }
-      previous = section;
     }
-    for (final banner in widePromos) {
-      add(PromoBanner(banner: banner, aspect: PromoBanner.wideAspect));
+
+    if (hero != null) {
+      final banners = hero.banners.take(HomePage._maxHeroBanners).toList();
+      add(HeroCarousel(banners: banners), gapBefore: 0);
+    }
+
+    for (final section in productSections) {
+      add(ProductRail(section: section), gapBefore: blocks.isEmpty ? 0 : 10.3);
+    }
+
+    if (benefits != null) {
+      add(TrustStrip(items: benefits.items));
+    }
+
+    if (hasCategories) {
+      final cards = featured.valueOrNull ?? const <CategoryModel>[];
+      if (featured.isLoading && cards.isEmpty) {
+        add(const _CategoryCardSkeleton());
+      } else if (cards.isNotEmpty) {
+        // One featured category card max — product collections keep the vertical space.
+        add(CategorySectionCard(category: cards.take(HomePage._maxFeaturedCategories).first));
+      }
+    }
+
+    if (promos != null) {
+      add(PromoRow(banners: promos.banners), gapBefore: 13.7);
     }
 
     if (blocks.isEmpty) {
@@ -201,6 +218,10 @@ class _HomeSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final cardWidth = (MediaQuery.sizeOf(context).width - HomePage.margin * 2 - 6.84 * 2 - 8.3) / 2;
+    final cardHeight = ProductCard.heightFor(cardWidth.clamp(100, 200), scaler);
+
     return AppSkeletonTheme(
       child: Skeletonizer(
         child: Padding(
@@ -208,7 +229,33 @@ class _HomeSkeleton extends StatelessWidget {
           child: Column(
             children: [
               const AspectRatio(aspectRatio: HeroCarousel.aspect, child: SkeletonBox(radius: HeroCarousel.radius)),
-              const SizedBox(height: 17.1),
+              const SizedBox(height: 10.3),
+              HomeCard(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(6.84, 12, 6.84, 10),
+                  child: Column(
+                    children: [
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: SkeletonBox(width: 120, height: 14, radius: 4),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: SizedBox(height: cardHeight, child: const SkeletonBox(radius: 10))),
+                          const SizedBox(width: 8.3),
+                          Expanded(child: SizedBox(height: cardHeight, child: const SkeletonBox(radius: 10))),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10.3),
+              const SizedBox(height: 70, child: SkeletonBox(radius: 11)),
+              const SizedBox(height: 10.3),
+              const _CategoryCardSkeleton(),
+              const SizedBox(height: 13.7),
               const Row(
                 children: [
                   Expanded(
@@ -219,16 +266,6 @@ class _HomeSkeleton extends StatelessWidget {
                     child: AspectRatio(aspectRatio: PromoBanner.halfAspect, child: SkeletonBox(radius: 11.2)),
                   ),
                 ],
-              ),
-              const SizedBox(height: 13.7),
-              const _CategoryCardSkeleton(),
-              const SizedBox(height: 11.2),
-              const _CategoryCardSkeleton(),
-              const SizedBox(height: 10.3),
-              HomeCard(
-                child: SizedBox(
-                  height: ProductCard.heightFor(ProductCard.designWidth, MediaQuery.textScalerOf(context)) + 48,
-                ),
               ),
             ],
           ),

@@ -21,8 +21,8 @@ class HeroCarousel extends StatefulWidget {
 
   final List<BannerModel> banners;
 
-  /// Matches the design's 790 x 320 banner artwork.
-  static const aspect = 790 / 320;
+  /// Shorter brand strip so product collections own the homepage scroll.
+  static const aspect = 3 / 1;
   static const radius = 11.7;
   static const autoplayInterval = Duration(seconds: 5);
 

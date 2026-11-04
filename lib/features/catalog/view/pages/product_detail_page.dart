@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fpdart/fpdart.dart' show Either;
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:pickorbeet/core/failure/failure.dart';
 import 'package:pickorbeet/core/motion/motion.dart';
@@ -19,6 +21,7 @@ import 'package:pickorbeet/core/theme/theme.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/brand_lockup.dart';
+import 'package:pickorbeet/core/widgets/fullscreen_image_gallery.dart';
 import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/core/widgets/quantity_stepper.dart';
 import 'package:pickorbeet/core/widgets/section.dart';
@@ -27,11 +30,13 @@ import 'package:pickorbeet/core/widgets/state_views.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
+import 'package:pickorbeet/features/catalog/product_gallery.dart';
 import 'package:pickorbeet/features/catalog/repositories/catalog_repository.dart';
 import 'package:pickorbeet/features/catalog/view/widgets/product_card.dart';
 import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
-import 'package:pickorbeet/features/checkout/checkout_logic.dart';
 import 'package:skeletonizer/skeletonizer.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 /// Gallery, options, and add to cart for one product.
 class ProductDetailPage extends ConsumerStatefulWidget {
@@ -49,7 +54,6 @@ class ProductDetailPage extends ConsumerStatefulWidget {
 class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   final _pages = PageController();
   final _optionsKey = GlobalKey();
-  final _area = TextEditingController();
   var _image = 0;
   var _quantity = 1;
   final _picked = <String, String>{};
@@ -58,8 +62,9 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   var _buying = false;
   var _justAdded = false;
   Timer? _addedTimer;
-  String? _deliveryNote;
-  var _deliveryFailed = false;
+  var _canReview = false;
+  ProductReview? _mineReview;
+  String? _reviewMetaSlug;
 
   @override
   void didUpdateWidget(ProductDetailPage oldWidget) {
@@ -72,10 +77,10 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     _adding = false;
     _buying = false;
     _justAdded = false;
+    _canReview = false;
+    _mineReview = null;
+    _reviewMetaSlug = null;
     _addedTimer?.cancel();
-    _deliveryNote = null;
-    _deliveryFailed = false;
-    _area.clear();
     if (_pages.hasClients) _pages.jumpToPage(0);
   }
 
@@ -83,7 +88,6 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   void dispose() {
     _addedTimer?.cancel();
     _pages.dispose();
-    _area.dispose();
     super.dispose();
   }
 
@@ -150,7 +154,9 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         }
       }
       _quantity = _clampQuantity(detail);
+      _image = 0;
     });
+    if (_pages.hasClients) _pages.jumpToPage(0);
   }
 
   int _clampQuantity(ProductDetail detail) {
@@ -240,10 +246,29 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     showToast(context, 'Link copied');
   }
 
+  void _loadReviewMeta(String slug) {
+    if (_reviewMetaSlug == slug) return;
+    _reviewMetaSlug = slug;
+    unawaited(() async {
+      final result = await ref.read(catalogRepositoryProvider).reviews(slug);
+      if (!mounted || _reviewMetaSlug != slug) return;
+      result.fold((_) {}, (payload) {
+        setState(() {
+          _canReview = payload.canReview;
+          _mineReview = payload.mine;
+        });
+      });
+    }());
+  }
+
   void _writeReview() {
     final signedIn = ref.read(sessionNotifierProvider) == SessionStatus.signedIn;
     if (!signedIn) {
       context.push(Routes.loginFrom(Routes.product(widget.slug)));
+      return;
+    }
+    if (!_canReview && _mineReview == null) {
+      showToast(context, 'Available after delivery');
       return;
     }
     unawaited(_openReview());
@@ -257,50 +282,34 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
       backgroundColor: AppPallete.surface,
       shape: const RoundedRectangleBorder(borderRadius: AppRadii.sheetBorder),
       builder: (context) => _ReviewSheet(
-        onSubmit: (rating, comment) => ref.read(catalogRepositoryProvider).saveReview(
+        mine: _mineReview,
+        canReview: _canReview,
+        onSubmit: (rating, comment, images) => ref.read(catalogRepositoryProvider).saveReview(
           slug,
           rating: rating,
           comment: comment,
+          images: images,
         ),
       ),
     );
     if (saved != true || !mounted) return;
+    _reviewMetaSlug = null;
+    _loadReviewMeta(slug);
     ref.invalidate(productDetailProvider(slug));
     showToast(context, 'Review saved', kind: ToastKind.success);
   }
 
-  void _checkDelivery() {
-    final query = _area.text.trim();
-    if (query.isEmpty) {
-      setState(() {
-        _deliveryNote = 'Enter an area or postal code';
-        _deliveryFailed = true;
-      });
-      return;
-    }
-    final cart = ref.read(cartNotifierProvider).valueOrNull ?? CartModel.empty;
-    final inside = _matchesInsideDhaka(query);
-    final charge = inside ? cart.deliveryInsideDhaka : cart.deliveryOutsideDhaka;
-    final place = inside ? 'Inside Dhaka' : 'Outside Dhaka';
-    final fee = Formatters.decimal(charge) > Formatters.decimal('0') ? ' · ${_taka(charge)}' : '';
-    setState(() {
-      _deliveryFailed = false;
-      _deliveryNote = 'Delivery available · $place$fee. Cash on delivery.';
-    });
+  Future<void> _openZoom(List<String> urls) {
+    final initial = urls.isEmpty ? 0 : _image.clamp(0, urls.length - 1).toInt();
+    return openFullscreenImages(context, urls: urls, initial: initial);
   }
 
-  Future<void> _openZoom(List<String> urls) {
-    final initial = _image.clamp(0, urls.length - 1).toInt();
-    return Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        fullscreenDialog: true,
-        transitionDuration: Motion.of(context, Motion.medium),
-        reverseTransitionDuration: Motion.of(context, Motion.short),
-        pageBuilder: (context, animation, _) => FadeTransition(
-          opacity: animation,
-          child: _ZoomGallery(urls: urls, initial: initial),
-        ),
-      ),
+  List<GallerySlide> _media(ProductDetail detail) {
+    final chosen = _selectedVariant(detail, _picked);
+    return galleryMediaForSelection(
+      detail: detail,
+      chosen: chosen,
+      picked: _picked,
     );
   }
 
@@ -382,12 +391,23 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
 
   Widget _loaded(ProductDetail detail) {
     _prepare(detail);
+    if (_reviewMetaSlug != detail.summary.slug) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _loadReviewMeta(detail.summary.slug);
+      });
+    }
     final about = _aboutCopy(detail);
     final specs = _specRows(detail);
     final blurb = detail.summary.shortDescription.trim();
     final warranty = detail.summary.warrantyPeriod.trim();
+    final signedIn = ref.watch(sessionNotifierProvider) == SessionStatus.signedIn;
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: () async {
+        _reviewMetaSlug = null;
+        await _refresh();
+        _loadReviewMeta(detail.summary.slug);
+      },
       color: AppPallete.primary,
       backgroundColor: AppPallete.surface,
       child: ListView(
@@ -400,12 +420,27 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
           const SizedBox(height: 14),
           _RiseIn(
             delay: const Duration(milliseconds: 60),
-            child: _summary(detail),
+            child: _summary(detail, signedIn: signedIn),
           ),
-          if (blurb.isNotEmpty || about != null || specs.isNotEmpty || warranty.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _about(blurb, about, specs, warranty),
-          ],
+          const SizedBox(height: 16),
+          _RiseIn(
+            delay: const Duration(milliseconds: 100),
+            child: _ProductInfoPanel(
+              slug: detail.summary.slug,
+              blurb: blurb,
+              copy: about,
+              specs: specs,
+              warranty: warranty,
+              reviewCount: detail.summary.reviewCount ?? 0,
+              canReview: _canReview,
+              mine: _mineReview,
+              onReviewSaved: () {
+                _reviewMetaSlug = null;
+                _loadReviewMeta(detail.summary.slug);
+                ref.invalidate(productDetailProvider(widget.slug));
+              },
+            ),
+          ),
           _RelatedRail(detail: detail),
         ],
       ),
@@ -413,12 +448,12 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   }
 
   Widget _gallery(ProductDetail detail) {
-    final urls = detail.gallery;
-    if (urls.isNotEmpty && _image >= urls.length) _image = urls.length - 1;
-    final photos = _photos(urls);
+    final slides = _media(detail);
+    if (slides.isNotEmpty && _image >= slides.length) _image = slides.length - 1;
+    final photos = _photos(slides);
     final percent = _discountPercent(detail.summary.price, detail.summary.comparePrice);
     final badge = officialBadgeStyleOf(ref);
-    final many = urls.length > 1;
+    final many = slides.length > 1;
     return Column(
       children: [
         DecoratedBox(
@@ -480,8 +515,8 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                           child: Center(
                             child: _GalleryArrow(
                               icon: PhosphorIconsBold.caretLeft,
-                              label: 'Previous photo',
-                              onTap: () => _showImage((_image - 1 + urls.length) % urls.length),
+                              label: 'Previous media',
+                              onTap: () => _showImage((_image - 1 + slides.length) % slides.length),
                             ),
                           ),
                         ),
@@ -492,15 +527,15 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                           child: Center(
                             child: _GalleryArrow(
                               icon: PhosphorIconsBold.caretRight,
-                              label: 'Next photo',
-                              onTap: () => _showImage((_image + 1) % urls.length),
+                              label: 'Next media',
+                              onTap: () => _showImage((_image + 1) % slides.length),
                             ),
                           ),
                         ),
                         Positioned(
                           right: 10,
                           bottom: 10,
-                          child: _CountPill(index: _image, count: urls.length),
+                          child: _CountPill(index: _image, count: slides.length),
                         ),
                       ],
                     ],
@@ -512,33 +547,46 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         ),
         if (many) ...[
           const SizedBox(height: 10),
-          _thumbs(urls),
+          _thumbs(slides),
         ],
       ],
     );
   }
 
-  Widget _photos(List<String> urls) {
-    if (urls.isEmpty) return _hero(const _EmptyPhoto(), enabled: true);
-    if (urls.length == 1) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => unawaited(_openZoom(urls)),
-        child: _hero(_photo(urls.first), enabled: true),
-      );
+  Widget _photos(List<GallerySlide> slides) {
+    if (slides.isEmpty) return _hero(const _EmptyPhoto(), enabled: true);
+    if (slides.length == 1) {
+      return _slide(slides.first, hero: true, zoomUrls: _imageUrls(slides));
     }
     return PageView.builder(
       controller: _pages,
-      itemCount: urls.length,
+      itemCount: slides.length,
       onPageChanged: (value) {
         if (_image == value) return;
         setState(() => _image = value);
       },
-      itemBuilder: (context, page) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => unawaited(_openZoom(urls)),
-        child: _hero(_photo(urls[page]), enabled: page == 0),
+      itemBuilder: (context, page) => _slide(
+        slides[page],
+        hero: page == 0,
+        zoomUrls: _imageUrls(slides),
       ),
+    );
+  }
+
+  List<String> _imageUrls(List<GallerySlide> slides) => [
+    for (final slide in slides)
+      if (slide is GalleryImageSlide && slide.image.image.isNotEmpty) slide.image.image,
+  ];
+
+  Widget _slide(GallerySlide slide, {required bool hero, required List<String> zoomUrls}) {
+    if (slide is GalleryVideoSlide) {
+      return _VideoSlide(video: slide.video);
+    }
+    final image = (slide as GalleryImageSlide).image;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => unawaited(_openZoom(zoomUrls)),
+      child: _hero(_photo(image.image), enabled: hero),
     );
   }
 
@@ -549,53 +597,37 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   }
 
   Widget _photo(String url) {
-    return AppNetworkImage(url: url, background: const Color(0xFFF7F9FC));
-  }
-
-  Widget _thumbs(List<String> urls) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 8.0;
-        const height = 64.0;
-        final fitted = urls.length <= 5;
-        final width = fitted
-            ? (constraints.maxWidth - gap * (urls.length - 1)) / urls.length
-            : 72.0;
-        final tiles = [
-          for (var page = 0; page < urls.length; page++)
-            _thumb(urls[page], page, width, height),
-        ];
-        if (fitted) {
-          return SizedBox(
-            height: height,
-            child: Row(
-              children: [
-                for (var page = 0; page < tiles.length; page++) ...[
-                  if (page > 0) const SizedBox(width: gap),
-                  tiles[page],
-                ],
-              ],
-            ),
-          );
-        }
-        return SizedBox(
-          height: height,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: tiles.length,
-            separatorBuilder: (_, _) => const SizedBox(width: gap),
-            itemBuilder: (_, page) => tiles[page],
-          ),
-        );
-      },
+    return AppNetworkImage(
+      url: url,
+      fit: BoxFit.contain,
+      background: const Color(0xFFF7F9FC),
     );
   }
 
-  Widget _thumb(String url, int page, double width, double height) {
+  Widget _thumbs(List<GallerySlide> slides) {
+    const gap = 8.0;
+    const width = 72.0;
+    const height = 64.0;
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: slides.length,
+        separatorBuilder: (_, _) => const SizedBox(width: gap),
+        itemBuilder: (_, page) => _thumb(slides[page], page, width, height),
+      ),
+    );
+  }
+
+  Widget _thumb(GallerySlide slide, int page, double width, double height) {
     final selected = page == _image;
+    final isVideo = slide is GalleryVideoSlide;
+    final url = isVideo
+        ? slide.video.thumbnailUrl
+        : (slide as GalleryImageSlide).image.image;
     return Pressable(
       pressedScale: 0.97,
-      semanticLabel: 'Photo ${page + 1}',
+      semanticLabel: isVideo ? 'Video ${page + 1}' : 'Photo ${page + 1}',
       onTap: () => _showImage(page),
       child: AnimatedContainer(
         duration: Motion.of(context, Motion.short),
@@ -608,17 +640,36 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(2),
-          child: AppNetworkImage(
-            url: url,
-            borderRadius: BorderRadius.circular(8),
-            background: const Color(0xFFF7F9FC),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              AppNetworkImage(
+                url: url,
+                fit: BoxFit.contain,
+                borderRadius: BorderRadius.circular(8),
+                background: const Color(0xFFF7F9FC),
+              ),
+              if (isVideo)
+                Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xB3172033),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(PhosphorIconsFill.play, size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _summary(ProductDetail detail) {
+  Widget _summary(ProductDetail detail, {required bool signedIn}) {
     final product = detail.summary;
     final price = _unitPrice(detail, _picked);
     final percent = _discountPercent(price, product.comparePrice);
@@ -678,6 +729,8 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         _RatingLine(
           rating: product.rating ?? 0,
           count: product.reviewCount ?? 0,
+          canWrite: !signedIn || _canReview || _mineReview != null,
+          hasMine: _mineReview != null,
           onWrite: _writeReview,
         ),
         const SizedBox(height: 10),
@@ -824,13 +877,6 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         ),
         const SizedBox(height: 16),
         const _TrustRow(),
-        const SizedBox(height: 14),
-        _DeliveryCard(
-          controller: _area,
-          note: _deliveryNote,
-          failed: _deliveryFailed,
-          onCheck: _checkDelivery,
-        ),
       ],
     );
   }
@@ -875,35 +921,215 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     );
   }
 
-  Widget _about(String blurb, String? copy, List<(String, String)> specs, String warranty) {
+}
+
+enum _InfoTab { description, specifications, delivery, reviews }
+
+class _ProductInfoPanel extends StatefulWidget {
+  const _ProductInfoPanel({
+    required this.slug,
+    required this.blurb,
+    required this.copy,
+    required this.specs,
+    required this.warranty,
+    required this.reviewCount,
+    required this.canReview,
+    required this.mine,
+    required this.onReviewSaved,
+  });
+
+  final String slug;
+  final String blurb;
+  final String? copy;
+  final List<(String, String)> specs;
+  final String warranty;
+  final int reviewCount;
+  final bool canReview;
+  final ProductReview? mine;
+  final VoidCallback onReviewSaved;
+
+  @override
+  State<_ProductInfoPanel> createState() => _ProductInfoPanelState();
+}
+
+class _ProductInfoPanelState extends State<_ProductInfoPanel> {
+  _InfoTab _tab = _InfoTab.description;
+
+  @override
+  Widget build(BuildContext context) {
     return _Sheet(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionHeader(title: 'Product details'),
-          if (blurb.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              blurb,
-              style: AppTypography.bodyLarge.copyWith(fontSize: 14, height: 1.4, fontWeight: FontWeight.w600, color: _DetailPalette.ink),
+          const SizedBox(height: 12),
+          _InfoTabBar(
+            tab: _tab,
+            onChanged: (value) => setState(() => _tab = value),
+            specCount: widget.specs.length,
+            reviewCount: widget.reviewCount,
+          ),
+          const SizedBox(height: 14),
+          AnimatedSwitcher(
+            duration: Motion.of(context, Motion.short),
+            switchInCurve: Motion.emphasized,
+            switchOutCurve: Curves.easeIn,
+            child: KeyedSubtree(
+              key: ValueKey(_tab),
+              child: switch (_tab) {
+                _InfoTab.description => _DescriptionPanel(
+                  blurb: widget.blurb,
+                  copy: widget.copy,
+                  warranty: widget.warranty,
+                ),
+                _InfoTab.specifications => _SpecTable(rows: widget.specs),
+                _InfoTab.delivery => const _DeliveryInfoPanel(),
+                _InfoTab.reviews => _ReviewsPanel(
+                  slug: widget.slug,
+                  canReview: widget.canReview,
+                  mine: widget.mine,
+                  onReviewSaved: widget.onReviewSaved,
+                ),
+              },
             ),
-          ],
-          if (copy != null) ...[
-            const SizedBox(height: 8),
-            _ExpandableText(copy),
-          ],
-          if (warranty.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _WarrantyCard(period: warranty),
-          ],
-          if (specs.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            const SectionHeader(title: 'Specifications'),
-            const SizedBox(height: 4),
-            for (final row in specs) _SpecRow(label: row.$1, value: row.$2),
-          ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _InfoTabBar extends StatelessWidget {
+  const _InfoTabBar({
+    required this.tab,
+    required this.onChanged,
+    required this.specCount,
+    required this.reviewCount,
+  });
+
+  final _InfoTab tab;
+  final ValueChanged<_InfoTab> onChanged;
+  final int specCount;
+  final int reviewCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _DetailPalette.line)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final item in _InfoTab.values)
+              _InfoTabChip(
+                label: switch (item) {
+                  _InfoTab.description => 'Description',
+                  _InfoTab.specifications =>
+                    specCount > 0 ? 'Specs ($specCount)' : 'Specs',
+                  _InfoTab.delivery => 'Delivery',
+                  _InfoTab.reviews => 'Reviews ($reviewCount)',
+                },
+                selected: tab == item,
+                onTap: () => onChanged(item),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoTabChip extends StatelessWidget {
+  const _InfoTabChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      pressedScale: 0.98,
+      semanticLabel: label,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Motion.of(context, Motion.short),
+        curve: Motion.emphasized,
+        margin: const EdgeInsets.only(right: 18),
+        padding: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? _DetailPalette.blue : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.label.copyWith(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? _DetailPalette.ink : _DetailPalette.muted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DescriptionPanel extends StatelessWidget {
+  const _DescriptionPanel({
+    required this.blurb,
+    required this.copy,
+    required this.warranty,
+  });
+
+  final String blurb;
+  final String? copy;
+  final String warranty;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = copy;
+    final hasCopy = body != null && body.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (blurb.isNotEmpty) ...[
+          Text(
+            blurb,
+            style: AppTypography.bodyLarge.copyWith(
+              fontSize: 14,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+              color: _DetailPalette.ink,
+            ),
+          ),
+          if (hasCopy || warranty.isNotEmpty) const SizedBox(height: 8),
+        ],
+        if (hasCopy)
+          _ExpandableText(body)
+        else if (blurb.isEmpty)
+          Text(
+            'The seller has not added a description yet.',
+            style: AppTypography.bodyLarge.copyWith(
+              fontSize: 13,
+              height: 1.5,
+              color: _DetailPalette.muted,
+            ),
+          ),
+        if (warranty.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _WarrantyCard(period: warranty),
+        ],
+      ],
     );
   }
 }
@@ -949,6 +1175,36 @@ class _WarrantyCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DeliveryInfoPanel extends StatelessWidget {
+  const _DeliveryInfoPanel();
+
+  static const _points = <String>[
+    'Delivery is available across Bangladesh. Cash on delivery means you pay when the order arrives.',
+    'You can request a return within 3 days of receiving the product. The item needs to be unused, in its original condition, with tags and packaging intact.',
+    'Damaged, defective, or wrong items can be returned. PickOrbeet covers the return delivery when the mistake is ours.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < _points.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          Text(
+            _points[i],
+            style: AppTypography.bodyLarge.copyWith(
+              fontSize: 13,
+              height: 1.5,
+              color: const Color(0xFF525E70),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1088,40 +1344,78 @@ class _ExpandableTextState extends State<_ExpandableText> {
   }
 }
 
-class _SpecRow extends StatelessWidget {
-  const _SpecRow({required this.label, required this.value});
+class _SpecTable extends StatelessWidget {
+  const _SpecTable({required this.rows});
 
-  final String label;
-  final String value;
+  final List<(String, String)> rows;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              label,
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppPallete.textSecondary,
-                fontSize: 12,
+    if (rows.isEmpty) {
+      return Text(
+        'Specifications will appear here once the seller adds them.',
+        style: AppTypography.bodyLarge.copyWith(
+          fontSize: 13,
+          height: 1.5,
+          color: _DetailPalette.muted,
+        ),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppPallete.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _DetailPalette.line),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          children: [
+            for (var i = 0; i < rows.length; i++)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: i.isEven ? const Color(0xFFF7F9FC) : AppPallete.surface,
+                  border: i == rows.length - 1
+                      ? null
+                      : const Border(bottom: BorderSide(color: Color(0xFFEEF2F7))),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          rows[i].$1,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: _DetailPalette.muted,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 6,
+                        child: Text(
+                          rows[i].$2,
+                          textAlign: TextAlign.right,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: _DetailPalette.ink,
+                            fontSize: 13,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppPallete.ink,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1301,10 +1595,18 @@ class _GalleryArrow extends StatelessWidget {
 }
 
 class _RatingLine extends StatelessWidget {
-  const _RatingLine({required this.rating, required this.count, required this.onWrite});
+  const _RatingLine({
+    required this.rating,
+    required this.count,
+    required this.canWrite,
+    required this.hasMine,
+    required this.onWrite,
+  });
 
   final double rating;
   final int count;
+  final bool canWrite;
+  final bool hasMine;
   final VoidCallback onWrite;
 
   @override
@@ -1312,6 +1614,9 @@ class _RatingLine extends StatelessWidget {
     final shown = count > 0 ? rating : 0.0;
     final score = count > 0 ? rating.toStringAsFixed(1) : '';
     final noun = count == 1 ? 'review' : 'reviews';
+    final label = !canWrite
+        ? 'Available after delivery'
+        : (hasMine ? 'Edit your review' : 'Write a review');
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 6,
@@ -1329,11 +1634,15 @@ class _RatingLine extends StatelessWidget {
         ),
         Container(width: 1, height: 12, color: const Color(0xFFD5DCE8)),
         Pressable(
-          semanticLabel: 'Write a review',
+          semanticLabel: label,
           onTap: onWrite,
           child: Text(
-            'Write a review',
-            style: AppTypography.label.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: _DetailPalette.blue),
+            label,
+            style: AppTypography.label.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: canWrite ? _DetailPalette.blue : _DetailPalette.muted,
+            ),
           ),
         ),
       ],
@@ -1397,8 +1706,8 @@ class _ColorSwatches extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 4,
-      runSpacing: 4,
+      spacing: 8,
+      runSpacing: 8,
       children: [
         for (final color in colors)
           Pressable(
@@ -1407,22 +1716,37 @@ class _ColorSwatches extends StatelessWidget {
             child: AnimatedContainer(
               duration: Motion.of(context, const Duration(milliseconds: 220)),
               curve: Motion.emphasized,
-              width: 36,
               height: 36,
-              padding: const EdgeInsets.all(3),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                color: AppPallete.surface,
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: color.label == selected ? _DetailPalette.ink : Colors.transparent,
-                  width: 2,
+                  color: color.label == selected ? _DetailPalette.blue : const Color(0xFFE6ECF5),
+                  width: 1.5,
                 ),
               ),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _paint(color.hex, color.label),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: _DetailPalette.ink.withValues(alpha: 0.08)),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _paint(color.hex, color.label),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _DetailPalette.ink.withValues(alpha: 0.08)),
+                    ),
+                    child: const SizedBox(width: 14, height: 14),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    color.label,
+                    style: AppTypography.bodyLarge.copyWith(
+                      fontSize: 13,
+                      fontWeight: color.label == selected ? FontWeight.w700 : FontWeight.w500,
+                      color: _DetailPalette.ink,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1485,194 +1809,6 @@ class _PurchaseButton extends StatelessWidget {
   }
 }
 
-class _DeliveryCard extends StatelessWidget {
-  const _DeliveryCard({
-    required this.controller,
-    required this.note,
-    required this.failed,
-    required this.onCheck,
-  });
-
-  final TextEditingController controller;
-  final String? note;
-  final bool failed;
-  final VoidCallback onCheck;
-
-  @override
-  Widget build(BuildContext context) {
-    final message = note;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppPallete.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _DetailPalette.line),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(PhosphorIconsFill.mapPin, size: 16, color: _DetailPalette.blue),
-                SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Check delivery availability',
-                    maxLines: 2,
-                    style: TextStyle(
-                      fontFamily: AppTypography.family,
-                      fontFamilyFallback: AppTypography.fallback,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _DetailPalette.ink,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: TextField(
-                      controller: controller,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => onCheck(),
-                      style: AppTypography.bodyLarge.copyWith(fontSize: 13, color: _DetailPalette.ink),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'Enter your area or postal code',
-                        hintStyle: AppTypography.bodyLarge.copyWith(fontSize: 13, color: _DetailPalette.muted),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                        filled: true,
-                        fillColor: AppPallete.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: _DetailPalette.line),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: _DetailPalette.line),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: _DetailPalette.blue, width: 1.4),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Pressable(
-                  pressedScale: 0.98,
-                  semanticLabel: 'Check',
-                  onTap: onCheck,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(color: _DetailPalette.blue, borderRadius: BorderRadius.circular(8)),
-                    child: const SizedBox(
-                      height: 40,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 14),
-                        child: Center(
-                          child: Text(
-                            'Check',
-                            style: TextStyle(
-                              fontFamily: AppTypography.family,
-                              fontFamilyFallback: AppTypography.fallback,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppPallete.onDark,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const _CodNote(),
-              ],
-            ),
-            AnimatedSwitcher(
-              duration: Motion.of(context, Motion.short),
-              switchInCurve: Motion.emphasized,
-              child: message == null
-                  ? const SizedBox(key: ValueKey('delivery-empty'), width: double.infinity)
-                  : Padding(
-                      key: ValueKey(message),
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        message,
-                        style: AppTypography.bodyMedium.copyWith(
-                          fontSize: 13,
-                          color: failed ? AppPallete.danger : _DetailPalette.save,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CodNote extends StatelessWidget {
-  const _CodNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _DetailPalette.saveSoft,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFD7F0E4)),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(PhosphorIconsRegular.money, size: 14, color: _DetailPalette.save),
-            SizedBox(width: 4),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Cash on Delivery',
-                  style: TextStyle(
-                    fontFamily: AppTypography.family,
-                    fontFamilyFallback: AppTypography.fallback,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: _DetailPalette.save,
-                    height: 1.15,
-                  ),
-                ),
-                Text(
-                  'Pay when you receive',
-                  style: TextStyle(
-                    fontFamily: AppTypography.family,
-                    fontFamilyFallback: AppTypography.fallback,
-                    fontSize: 9,
-                    color: _DetailPalette.muted,
-                    height: 1.15,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _RiseIn extends StatefulWidget {
   const _RiseIn({required this.child, this.delay = Duration.zero});
 
@@ -1724,10 +1860,406 @@ class _RiseInState extends State<_RiseIn> with SingleTickerProviderStateMixin {
   }
 }
 
-class _ReviewSheet extends StatefulWidget {
-  const _ReviewSheet({required this.onSubmit});
+class _ReviewsPanel extends ConsumerStatefulWidget {
+  const _ReviewsPanel({
+    required this.slug,
+    required this.canReview,
+    required this.mine,
+    required this.onReviewSaved,
+  });
 
-  final Future<Either<AppFailure, bool>> Function(int rating, String comment) onSubmit;
+  final String slug;
+  final bool canReview;
+  final ProductReview? mine;
+  final VoidCallback onReviewSaved;
+
+  @override
+  ConsumerState<_ReviewsPanel> createState() => _ReviewsPanelState();
+}
+
+class _ReviewsPanelState extends ConsumerState<_ReviewsPanel> {
+  var _query = const ProductReviewsQuery();
+  ProductReviewsPayload? _payload;
+  var _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_fetch());
+  }
+
+  Future<void> _fetch() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final result = await ref.read(catalogRepositoryProvider).reviews(widget.slug, _query);
+    if (!mounted) return;
+    result.fold(
+      (failure) => setState(() {
+        _loading = false;
+        _error = failure.message;
+      }),
+      (payload) => setState(() {
+        _loading = false;
+        _payload = payload;
+      }),
+    );
+  }
+
+  void _patchQuery(ProductReviewsQuery next) {
+    setState(() => _query = next);
+    unawaited(_fetch());
+  }
+
+  Future<void> _openWrite() async {
+    final signedIn = ref.read(sessionNotifierProvider) == SessionStatus.signedIn;
+    if (!signedIn) {
+      unawaited(context.push(Routes.loginFrom(Routes.product(widget.slug))));
+      return;
+    }
+    if (!widget.canReview && widget.mine == null) {
+      showToast(context, 'Available after delivery');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppPallete.surface,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadii.sheetBorder),
+      builder: (context) => _ReviewSheet(
+        mine: widget.mine,
+        canReview: widget.canReview,
+        onSubmit: (rating, comment, images) => ref.read(catalogRepositoryProvider).saveReview(
+          widget.slug,
+          rating: rating,
+          comment: comment,
+          images: images,
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    widget.onReviewSaved();
+    unawaited(_fetch());
+    showToast(context, 'Review saved', kind: ToastKind.success);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = _payload;
+    final breakdown = payload?.ratingBreakdown ?? const {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+    final count = payload?.count ?? 0;
+    final average = payload?.average;
+    final results = payload?.results ?? const <ProductReview>[];
+    final maxBar = breakdown.values.fold<int>(1, (a, b) => a > b ? a : b);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  count > 0 && average != null ? average.toStringAsFixed(1) : '—',
+                  style: AppTypography.titleLarge.copyWith(fontSize: 28, fontWeight: FontWeight.w800, color: _DetailPalette.ink),
+                ),
+                _Stars(value: count > 0 ? (average ?? 0) : 0),
+                const SizedBox(height: 4),
+                Text(
+                  '$count review${count == 1 ? '' : 's'}',
+                  style: AppTypography.label.copyWith(fontSize: 12, color: _DetailPalette.muted),
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                children: [
+                  for (var star = 5; star >= 1; star--)
+                    Pressable(
+                      onTap: () => _patchQuery(
+                        _query.copyWith(
+                          rating: _query.rating == star ? null : star,
+                          clearRating: _query.rating == star,
+                          page: 1,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 28,
+                              child: Text(
+                                '$star★',
+                                style: AppTypography.label.copyWith(
+                                  fontSize: 11,
+                                  fontWeight: _query.rating == star ? FontWeight.w700 : FontWeight.w500,
+                                  color: _DetailPalette.ink,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: count == 0 ? 0 : (breakdown[star] ?? 0) / maxBar,
+                                  minHeight: 6,
+                                  backgroundColor: const Color(0xFFEEF2F7),
+                                  color: _DetailPalette.star,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            SizedBox(
+                              width: 18,
+                              child: Text(
+                                '${breakdown[star] ?? 0}',
+                                textAlign: TextAlign.right,
+                                style: AppTypography.label.copyWith(fontSize: 11, color: _DetailPalette.muted),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var star = 5; star >= 1; star--)
+              _FilterChip(
+                label: '$star stars',
+                selected: _query.rating == star,
+                onTap: () => _patchQuery(
+                  _query.copyWith(
+                    rating: _query.rating == star ? null : star,
+                    clearRating: _query.rating == star,
+                    page: 1,
+                  ),
+                ),
+              ),
+            _FilterChip(
+              label: 'With photos',
+              selected: _query.withPhotos,
+              onTap: () => _patchQuery(_query.copyWith(withPhotos: !_query.withPhotos, page: 1)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Sort', style: AppTypography.label.copyWith(fontSize: 12, color: _DetailPalette.muted)),
+                const SizedBox(width: 8),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _query.sort,
+                    isDense: true,
+                    items: const [
+                      DropdownMenuItem(value: 'newest', child: Text('Newest')),
+                      DropdownMenuItem(value: 'highest', child: Text('Highest rated')),
+                      DropdownMenuItem(value: 'lowest', child: Text('Lowest rated')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _patchQuery(_query.copyWith(sort: value, page: 1));
+                    },
+                  ),
+                ),
+              ],
+            ),
+            Builder(
+              builder: (context) {
+                final signedIn = ref.watch(sessionNotifierProvider) == SessionStatus.signedIn;
+                final canWrite = !signedIn || widget.canReview || widget.mine != null;
+                final label = !canWrite
+                    ? 'Available after delivery'
+                    : (widget.mine != null ? 'Edit your review' : 'Write a review');
+                return Pressable(
+                  onTap: () => unawaited(_openWrite()),
+                  child: Text(
+                    label,
+                    style: AppTypography.label.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: canWrite ? _DetailPalette.blue : _DetailPalette.muted,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_loading && payload == null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else if (_error != null)
+          Text(_error!, style: AppTypography.bodyMedium.copyWith(color: const Color(0xFFD14343)))
+        else if (results.isEmpty)
+          Text(
+            count == 0 ? 'No reviews yet. Be the first to review this product.' : 'No reviews match these filters.',
+            style: AppTypography.bodyMedium.copyWith(fontSize: 13, color: _DetailPalette.muted),
+          )
+        else
+          for (final review in results) ...[
+            _ReviewTile(review: review),
+            const Divider(height: 24, color: Color(0xFFEEF2F7)),
+          ],
+        if (payload != null && (payload.previous != null || payload.next != null))
+          Row(
+            children: [
+              TextButton(
+                onPressed: payload.previous == null || _loading
+                    ? null
+                    : () => _patchQuery(_query.copyWith(page: _query.page - 1)),
+                child: const Text('Previous'),
+              ),
+              Text('Page ${_query.page}', style: AppTypography.label.copyWith(fontSize: 12, color: _DetailPalette.muted)),
+              TextButton(
+                onPressed: payload.next == null || _loading
+                    ? null
+                    : () => _patchQuery(_query.copyWith(page: _query.page + 1)),
+                child: const Text('Next'),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Motion.of(context, Motion.short),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? _DetailPalette.ink : const Color(0xFFF1F4F9),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.label.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : _DetailPalette.muted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.review});
+
+  final ProductReview review;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              review.author,
+              style: AppTypography.label.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: _DetailPalette.ink),
+            ),
+            _Stars(value: review.rating.toDouble()),
+            Text(
+              review.createdAt.length >= 10 ? review.createdAt.substring(0, 10) : review.createdAt,
+              style: AppTypography.label.copyWith(fontSize: 11, color: _DetailPalette.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          review.comment,
+          style: AppTypography.bodyMedium.copyWith(fontSize: 13, height: 1.45, color: const Color(0xFF525E70)),
+        ),
+        if (review.images.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 64,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: review.images.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final urls = [
+                  for (final image in review.images)
+                    if (image.image.trim().isNotEmpty) image.image,
+                ];
+                final url = review.images[index].image;
+                return Pressable(
+                  semanticLabel: 'View review photo',
+                  onTap: urls.isEmpty
+                      ? null
+                      : () => openFullscreenImages(context, urls: urls, initial: index),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: AppNetworkImage(url: url),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ReviewSheet extends StatefulWidget {
+  const _ReviewSheet({
+    required this.onSubmit,
+    required this.canReview,
+    this.mine,
+  });
+
+  final ProductReview? mine;
+  final bool canReview;
+  final Future<Either<AppFailure, bool>> Function(
+    int rating,
+    String comment,
+    List<({String filename, List<int> bytes})> images,
+  ) onSubmit;
 
   @override
   State<_ReviewSheet> createState() => _ReviewSheetState();
@@ -1735,14 +2267,43 @@ class _ReviewSheet extends StatefulWidget {
 
 class _ReviewSheetState extends State<_ReviewSheet> {
   final _comment = TextEditingController();
+  final _picker = ImagePicker();
   var _rating = 5;
   var _saving = false;
   String? _error;
+  final _images = <({String filename, List<int> bytes, Uint8List preview})>[];
+
+  @override
+  void initState() {
+    super.initState();
+    final mine = widget.mine;
+    if (mine != null) {
+      _rating = mine.rating.clamp(1, 5);
+      _comment.text = mine.comment;
+    }
+  }
 
   @override
   void dispose() {
     _comment.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhotos() async {
+    final picked = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 1600, limit: 5);
+    if (picked.isEmpty || !mounted) return;
+    final next = <({String filename, List<int> bytes, Uint8List preview})>[..._images];
+    for (final file in picked) {
+      if (next.length >= 5) break;
+      final bytes = await file.readAsBytes();
+      next.add((filename: file.name, bytes: bytes, preview: bytes));
+    }
+    if (!mounted) return;
+    setState(() {
+      _images
+        ..clear()
+        ..addAll(next.take(5));
+    });
   }
 
   Future<void> _send() async {
@@ -1755,7 +2316,11 @@ class _ReviewSheetState extends State<_ReviewSheet> {
       _saving = true;
       _error = null;
     });
-    final result = await widget.onSubmit(_rating, comment);
+    final result = await widget.onSubmit(
+      _rating,
+      comment,
+      [for (final image in _images) (filename: image.filename, bytes: image.bytes)],
+    );
     if (!mounted) return;
     result.fold(
       (failure) => setState(() {
@@ -1769,55 +2334,117 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final eligible = widget.canReview || widget.mine != null;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Write a review', style: AppTypography.titleLarge.copyWith(fontSize: 18, color: _DetailPalette.ink)),
+          Text(
+            widget.mine != null ? 'Your review' : 'Write a review',
+            style: AppTypography.titleLarge.copyWith(fontSize: 18, color: _DetailPalette.ink),
+          ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              for (var star = 1; star <= 5; star++)
-                Pressable(
-                  semanticLabel: '$star star${star == 1 ? '' : 's'}',
-                  onTap: _saving ? null : () => setState(() => _rating = star),
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      PhosphorIconsFill.star,
-                      size: 28,
-                      color: star <= _rating ? _DetailPalette.star : _DetailPalette.starEmpty,
+          if (!eligible)
+            Text(
+              'Available after delivery — you can review this product once an order with it is delivered.',
+              style: AppTypography.bodyMedium.copyWith(fontSize: 13, color: _DetailPalette.muted),
+            )
+          else ...[
+            Row(
+              children: [
+                for (var star = 1; star <= 5; star++)
+                  Pressable(
+                    semanticLabel: '$star star${star == 1 ? '' : 's'}',
+                    onTap: _saving ? null : () => setState(() => _rating = star),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(
+                        PhosphorIconsFill.star,
+                        size: 28,
+                        color: star <= _rating ? _DetailPalette.star : _DetailPalette.starEmpty,
+                      ),
                     ),
                   ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _comment,
+              minLines: 3,
+              maxLines: 5,
+              maxLength: 2000,
+              textInputAction: TextInputAction.newline,
+              decoration: InputDecoration(
+                hintText: 'How was this product?',
+                errorText: _error,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            if (_images.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 64,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _images.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final image = _images[index];
+                    return Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(image.preview, width: 64, height: 64, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          right: 2,
+                          top: 2,
+                          child: Pressable(
+                            onTap: _saving
+                                ? null
+                                : () => setState(() => _images.removeAt(index)),
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(color: Color(0xB3172033), shape: BoxShape.circle),
+                              child: Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Icon(PhosphorIconsBold.x, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
+              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _comment,
-            minLines: 3,
-            maxLines: 5,
-            maxLength: 2000,
-            textInputAction: TextInputAction.newline,
-            decoration: InputDecoration(
-              hintText: 'How was this product?',
-              errorText: _error,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            const SizedBox(height: 8),
+            Pressable(
+              onTap: _saving || _images.length >= 5 ? null : () => unawaited(_pickPhotos()),
+              child: Text(
+                'Add photos (${_images.length}/5)',
+                style: AppTypography.label.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: _DetailPalette.blue),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _PurchaseButton(
-              label: _saving ? 'Saving...' : 'Submit review',
-              icon: PhosphorIconsBold.check,
-              filled: true,
-              enabled: !_saving,
-              onTap: () => unawaited(_send()),
+            const SizedBox(height: 4),
+            Text(
+              'New uploads replace existing photos.',
+              style: AppTypography.label.copyWith(fontSize: 11, color: _DetailPalette.muted),
             ),
-          ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _PurchaseButton(
+                label: _saving ? 'Saving...' : (widget.mine != null ? 'Update review' : 'Submit review'),
+                icon: PhosphorIconsBold.check,
+                filled: true,
+                enabled: !_saving,
+                onTap: () => unawaited(_send()),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1950,6 +2577,86 @@ class _CountPill extends StatelessWidget {
   }
 }
 
+class _VideoSlide extends StatefulWidget {
+  const _VideoSlide({required this.video});
+
+  final ProductVideo video;
+
+  @override
+  State<_VideoSlide> createState() => _VideoSlideState();
+}
+
+class _VideoSlideState extends State<_VideoSlide> {
+  WebViewController? _controller;
+  var _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final embed = widget.video.embedUrl;
+    if (embed.isEmpty) {
+      _failed = true;
+      return;
+    }
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFFF7F9FC))
+      ..loadRequest(Uri.parse(embed));
+    _controller = controller;
+  }
+
+  Future<void> _openExternally() async {
+    final raw = widget.video.youtubeUrl.trim().isNotEmpty
+        ? widget.video.youtubeUrl.trim()
+        : 'https://www.youtube.com/watch?v=${widget.video.youtubeId}';
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed || _controller == null) {
+      return ColoredBox(
+        color: const Color(0xFFF7F9FC),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(PhosphorIconsFill.play, size: 36, color: _DetailPalette.blue),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => unawaited(_openExternally()),
+                child: const Text('Open on YouTube'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        WebViewWidget(controller: _controller!),
+        Positioned(
+          left: 8,
+          bottom: 8,
+          child: TextButton.icon(
+            onPressed: () => unawaited(_openExternally()),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xB3172033),
+              visualDensity: VisualDensity.compact,
+            ),
+            icon: const Icon(PhosphorIconsRegular.arrowSquareOut, size: 14),
+            label: const Text('YouTube'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _EmptyPhoto extends StatelessWidget {
   const _EmptyPhoto();
 
@@ -1960,96 +2667,6 @@ class _EmptyPhoto extends StatelessWidget {
         PhosphorIconsLight.image,
         size: 42,
         color: AppPallete.textHint,
-      ),
-    );
-  }
-}
-
-class _ZoomGallery extends StatefulWidget {
-  const _ZoomGallery({required this.urls, required this.initial});
-
-  final List<String> urls;
-  final int initial;
-
-  @override
-  State<_ZoomGallery> createState() => _ZoomGalleryState();
-}
-
-class _ZoomGalleryState extends State<_ZoomGallery> {
-  late final PageController _controller = PageController(
-    initialPage: widget.initial,
-  );
-  late int _index = widget.initial;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final top = MediaQuery.paddingOf(context).top;
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppTheme.overlayOnDark,
-      child: Scaffold(
-        backgroundColor: AppPallete.ink,
-        body: Stack(
-          children: [
-            PageView.builder(
-              controller: _controller,
-              itemCount: widget.urls.length,
-              onPageChanged: (index) => setState(() => _index = index),
-              itemBuilder: (_, page) => LayoutBuilder(
-                builder: (context, constraints) => InteractiveViewer(
-                  minScale: 1,
-                  maxScale: 4,
-                  child: SizedBox(
-                    width: constraints.maxWidth,
-                    height: constraints.maxHeight,
-                    child: AppNetworkImage(
-                      url: widget.urls[page],
-                      fit: BoxFit.contain,
-                      background: Colors.transparent,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (widget.urls.length > 1)
-              Positioned(
-                top: top + 20,
-                left: 60,
-                right: 60,
-                child: IgnorePointer(
-                  child: Text(
-                    '${_index + 1} / ${widget.urls.length}',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.titleSmall.copyWith(
-                      color: AppPallete.onDark,
-                    ),
-                  ),
-                ),
-              ),
-            Positioned(
-              top: top + 8,
-              left: 8,
-              child: Pressable(
-                semanticLabel: 'Close',
-                onTap: () => Navigator.of(context).pop(),
-                child: const SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Icon(
-                    PhosphorIconsRegular.x,
-                    color: AppPallete.onDark,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -2106,6 +2723,11 @@ List<VariantChoice> _variantChoices(ProductVariant variant) {
   ];
 }
 
+bool _isColorGroup(String name, String kind) {
+  if (kind == 'swatch') return true;
+  return RegExp(r'\bcolou?rs?\b', caseSensitive: false).hasMatch(name.trim());
+}
+
 List<_Group> _groups(ProductDetail detail) {
   if (detail.optionGroups.isNotEmpty) {
     return [
@@ -2113,7 +2735,7 @@ List<_Group> _groups(ProductDetail detail) {
         if (group.name.trim().isNotEmpty && group.values.isNotEmpty)
           _Group(
             name: group.name.trim(),
-            kind: group.kind == 'swatch' ? 'swatch' : 'text',
+            kind: _isColorGroup(group.name, group.kind) ? 'swatch' : 'text',
             required: true,
             values: [
               for (final value in group.values)
@@ -2121,7 +2743,7 @@ List<_Group> _groups(ProductDetail detail) {
                   VariantChoice(
                     name: group.name.trim(),
                     label: value.label.trim(),
-                    kind: group.kind == 'swatch' ? 'swatch' : 'text',
+                    kind: _isColorGroup(group.name, group.kind) ? 'swatch' : 'text',
                     colorHex: value.colorHex,
                   ),
             ],
@@ -2318,17 +2940,10 @@ String _cleanSpec(String value) => value
     .join(' · ');
 
 List<(String, String)> _specRows(ProductDetail detail) {
-  final rows = <(String, String)>[
-    if (detail.summary.sku.trim().isNotEmpty)
-      ('SKU', detail.summary.sku.trim()),
+  return [
+    for (final row in detail.specs)
+      if (_cleanSpec(row.$2).isNotEmpty) (row.$1, _cleanSpec(row.$2)),
   ];
-  for (final row in detail.specs) {
-    if (row.$1 == 'Category') continue;
-    final value = _cleanSpec(row.$2);
-    if (value.isEmpty) continue;
-    rows.add((row.$1, value));
-  }
-  return rows;
 }
 
 String? _aboutCopy(ProductDetail detail) {
@@ -2339,15 +2954,6 @@ String? _aboutCopy(ProductDetail detail) {
 }
 
 String _taka(Object? value) => '৳${Formatters.amount(value)}';
-
-bool _matchesInsideDhaka(String text) {
-  final value = text.trim().toLowerCase();
-  if (value.isEmpty) return false;
-  if (shipsInsideDhaka(city: value, district: value)) return true;
-  return value.split(RegExp(r'[^a-z]+')).where((word) => word.isNotEmpty).any(
-    (word) => shipsInsideDhaka(city: word, district: word),
-  );
-}
 
 Color _paint(String hex, String name) {
   final value = hex.trim();

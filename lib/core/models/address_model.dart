@@ -15,6 +15,8 @@ class AddressModel {
     this.addressType = 'shipping',
     this.label = '',
     this.addressLine2 = '',
+    this.division = '',
+    this.postOffice = '',
     this.postalCode = '',
     this.country = 'Bangladesh',
     this.isDefault = false,
@@ -28,8 +30,10 @@ class AddressModel {
   final String phone;
   final String addressLine1;
   final String addressLine2;
+  final String division;
   final String city;
   final String district;
+  final String postOffice;
   final String postalCode;
   final String country;
   final bool isDefault;
@@ -41,7 +45,7 @@ class AddressModel {
   /// `Dhaka 1217, Bangladesh`
   String get localityLine {
     final cityPart = [city, postalCode].where((p) => p.trim().isNotEmpty).join(' ');
-    return [cityPart, country].where((p) => p.trim().isNotEmpty).join(', ');
+    return [cityPart, district, division, country].where((p) => p.trim().isNotEmpty).join(', ');
   }
 
   factory AddressModel.fromMap(Json map) => AddressModel(
@@ -52,8 +56,10 @@ class AddressModel {
         phone: map.str('phone'),
         addressLine1: map.str('address_line1'),
         addressLine2: map.str('address_line2'),
+        division: map.str('division'),
         city: map.str('city'),
         district: map.str('district'),
+        postOffice: map.str('post_office'),
         postalCode: map.str('postal_code'),
         country: map.str('country', 'Bangladesh'),
         isDefault: map.boolean('is_default'),
@@ -68,8 +74,10 @@ class AddressModel {
         'phone': phone,
         'address_line1': addressLine1,
         'address_line2': addressLine2,
+        'division': division,
         'city': city,
         'district': district,
+        'post_office': postOffice,
         'postal_code': postalCode,
         'country': country,
         'is_default': isDefault,
@@ -83,8 +91,10 @@ class AddressModel {
     String? phone,
     String? addressLine1,
     String? addressLine2,
+    String? division,
     String? city,
     String? district,
+    String? postOffice,
     String? postalCode,
     bool? isDefault,
   }) {
@@ -96,8 +106,10 @@ class AddressModel {
       phone: phone ?? this.phone,
       addressLine1: addressLine1 ?? this.addressLine1,
       addressLine2: addressLine2 ?? this.addressLine2,
+      division: division ?? this.division,
       city: city ?? this.city,
       district: district ?? this.district,
+      postOffice: postOffice ?? this.postOffice,
       postalCode: postalCode ?? this.postalCode,
       country: country,
       isDefault: isDefault ?? this.isDefault,
@@ -109,5 +121,17 @@ class AddressModel {
   bool operator ==(Object other) => other is AddressModel && other.id == id && mapEquals(other.toMap(), toMap());
 
   @override
-  int get hashCode => Object.hash(id, fullName, phone, addressLine1, addressLine2, city, district, postalCode, isDefault);
+  int get hashCode => Object.hash(
+        id,
+        fullName,
+        phone,
+        addressLine1,
+        addressLine2,
+        division,
+        city,
+        district,
+        postOffice,
+        postalCode,
+        isDefault,
+      );
 }

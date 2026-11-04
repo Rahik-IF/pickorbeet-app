@@ -13,9 +13,14 @@ const dhakaDeliveryAreas = {
   'mohammadpur',
 };
 
-bool shipsInsideDhaka({required String city, required String district}) {
+bool shipsInsideDhaka({
+  required String city,
+  required String district,
+  String division = '',
+}) {
   return dhakaDeliveryAreas.contains(city.trim().toLowerCase()) ||
-      district.trim().toLowerCase() == 'dhaka';
+      district.trim().toLowerCase() == 'dhaka' ||
+      division.trim().toLowerCase() == 'dhaka';
 }
 
 /// `01712345678` -> `+880 1712-345678`, the form on the checkout design.
@@ -33,12 +38,15 @@ List<String> checkoutAddressLines(AddressModel address) {
   final line2 = address.addressLine2.trim();
   final city = address.city.trim();
   final district = address.district.trim();
+  final division = address.division.trim();
+  final postOffice = address.postOffice.trim();
   final postal = address.postalCode.trim();
   final place = <String>[
-    if (district.isNotEmpty && district.toLowerCase() != city.toLowerCase())
-      district,
-    if (city.isNotEmpty) postal.isEmpty ? city : '$city-$postal',
-    if (city.isEmpty && postal.isNotEmpty) postal,
+    if (city.isNotEmpty) city,
+    if (postOffice.isNotEmpty) postal.isEmpty ? postOffice : '$postOffice-$postal',
+    if (postOffice.isEmpty && postal.isNotEmpty) postal,
+    if (district.isNotEmpty && district.toLowerCase() != city.toLowerCase()) district,
+    if (division.isNotEmpty && division.toLowerCase() != district.toLowerCase()) division,
   ].join(', ');
   final second = [line2, place].where((part) => part.isNotEmpty).join(', ');
   return [if (line1.isNotEmpty) line1, if (second.isNotEmpty) second];
@@ -59,8 +67,10 @@ Map<String, Object?> checkoutPayload({
   required String phone,
   required String line1,
   String line2 = '',
+  required String division,
   required String city,
   required String district,
+  String postOffice = '',
   String postalCode = '',
   String? couponCode,
   List<String> itemIds = const [],
@@ -75,12 +85,15 @@ Map<String, Object?> checkoutPayload({
     'shipping_phone': apiPhone,
     'shipping_address_line1': line1.trim(),
     if (line2.trim().isNotEmpty) 'shipping_address_line2': line2.trim(),
+    'shipping_division': division.trim(),
     'shipping_city': city.trim(),
     'shipping_district': district.trim(),
+    if (postOffice.trim().isNotEmpty) 'shipping_post_office': postOffice.trim(),
     if (postalCode.trim().isNotEmpty) 'shipping_postal_code': postalCode.trim(),
     if (coupon.isNotEmpty) 'coupon_code': coupon,
     if (itemIds.isNotEmpty) 'item_ids': itemIds,
     'payment_method': payment.apiValue,
+    'platform': 'app',
     if (asGuest) 'guest_name': name.trim(),
     if (asGuest) 'guest_phone': apiPhone,
     if (asGuest && email != null && email.trim().isNotEmpty)

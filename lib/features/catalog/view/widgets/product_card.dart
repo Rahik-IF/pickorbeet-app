@@ -15,11 +15,11 @@ import 'package:pickorbeet/core/router/routes.dart';
 import 'package:pickorbeet/core/theme/app_pallete.dart';
 import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
-import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
 import 'package:pickorbeet/features/cart/models/cart_model.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
 import 'package:pickorbeet/features/catalog/models/official_badge.dart';
+import 'package:pickorbeet/features/catalog/view/widgets/product_card_gallery.dart';
 import 'package:pickorbeet/features/catalog/viewmodel/catalog_providers.dart';
 
 /// Adds one unit to the cart, or opens the product when a size or colour must be picked first.
@@ -114,7 +114,12 @@ class ProductCard extends ConsumerWidget {
                         padding: EdgeInsets.fromLTRB(10 * s, 20 * s, 10 * s, 4 * s),
                         child: Hero(
                           tag: heroTag,
-                          child: _ProductImage(url: product.primaryImage, soldOut: soldOut),
+                          child: ProductCardGallery(
+                            urls: product.galleryImages.isNotEmpty
+                                ? product.galleryImages
+                                : [if (product.primaryImage != null) product.primaryImage!],
+                            soldOut: soldOut,
+                          ),
                         ),
                       ),
                     ),
@@ -177,31 +182,6 @@ class ProductCard extends ConsumerWidget {
     );
   }
 
-}
-
-class _ProductImage extends StatelessWidget {
-  const _ProductImage({required this.url, required this.soldOut});
-
-  final String? url;
-  final bool soldOut;
-
-  @override
-  Widget build(BuildContext context) {
-    final image = AppNetworkImage(url: url, fit: BoxFit.contain, background: Colors.transparent);
-    if (!soldOut) return image;
-    return Opacity(
-      opacity: 0.55,
-      child: ColorFiltered(
-        colorFilter: const ColorFilter.matrix(<double>[
-          0.33, 0.59, 0.11, 0, 0, //
-          0.33, 0.59, 0.11, 0, 0, //
-          0.33, 0.59, 0.11, 0, 0, //
-          0, 0, 0, 1, 0,
-        ]),
-        child: image,
-      ),
-    );
-  }
 }
 
 class _PriceBlock extends StatelessWidget {

@@ -26,10 +26,71 @@ const _ordersChannel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
+const _androidInit = AndroidInitializationSettings('@mipmap/launcher_icon');
+const _iosInit = DarwinInitializationSettings();
+
+/// Creates the Android tray channel early so FCM can target `orders` before sign-in.
+Future<void> ensureOrdersNotificationChannel() async {
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    const InitializationSettings(android: _androidInit, iOS: _iosInit),
+  );
+  final android = plugin.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(_ordersChannel);
+}
+
+Future<void> _showTrayNotification({
+  required String id,
+  required String title,
+  required String body,
+  String orderId = '',
+  String target = '',
+}) async {
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    const InitializationSettings(android: _androidInit, iOS: _iosInit),
+  );
+  final android = plugin.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(_ordersChannel);
+  await plugin.show(
+    id.hashCode,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'orders',
+        'Orders',
+        channelDescription: 'Order and payment updates',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(),
+    ),
+    payload: '$id|$orderId|$target',
+  );
+}
+
 /// Shown by the system when a message arrives and the app is not in the foreground.
+///
+/// When FCM includes a notification payload, Android/iOS already post the tray
+/// item. This handler only fills the gap for data-only pushes.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+  if (message.notification != null) return;
+  final row = _fromRemote(message);
+  if (row == null) return;
+  final orderId = row.data['order_id'];
+  final target = row.data['target'];
+  await _showTrayNotification(
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    orderId: orderId is String ? orderId : '',
+    target: target is String ? target : '',
+  );
 }
 
 bool _firebaseReady = false;
@@ -39,6 +100,7 @@ Future<void> startFirebase() async {
   try {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await ensureOrdersNotificationChannel();
     _firebaseReady = true;
   } on Object {
     _firebaseReady = false;
@@ -46,7 +108,7 @@ Future<void> startFirebase() async {
 }
 
 /// Keeps the live socket and the phone token in step with the signed-in session.
-class NotificationLifecycle extends Notifier<void> {
+class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
   WebSocketChannel? _socket;
   StreamSubscription<dynamic>? _socketSub;
   StreamSubscription<String>? _tokenRefresh;
@@ -56,9 +118,13 @@ class NotificationLifecycle extends Notifier<void> {
   int _generation = 0;
   var _stopped = true;
   var _socketConnected = false;
+  var _observingLifecycle = false;
+  AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   final _presented = <String>{};
   final _local = FlutterLocalNotificationsPlugin();
   var _localReady = false;
+
+  bool get _resumed => _lifecycle == AppLifecycleState.resumed;
 
   @override
   void build() {
@@ -74,6 +140,7 @@ class NotificationLifecycle extends Notifier<void> {
     });
     ref.onDispose(() {
       api.beforeSessionExpired = previous;
+      _detachLifecycle();
       unawaited(stop());
     });
     if (ref.read(sessionNotifierProvider) == SessionStatus.signedIn) {
@@ -81,9 +148,41 @@ class NotificationLifecycle extends Notifier<void> {
     }
   }
 
+  void _attachLifecycle() {
+    if (_observingLifecycle) return;
+    WidgetsBinding.instance.addObserver(this);
+    _observingLifecycle = true;
+    _lifecycle = WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
+  }
+
+  void _detachLifecycle() {
+    if (!_observingLifecycle) return;
+    WidgetsBinding.instance.removeObserver(this);
+    _observingLifecycle = false;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final wasResumed = _resumed;
+    _lifecycle = state;
+    if (_stopped) return;
+    if (state == AppLifecycleState.resumed && !wasResumed) {
+      unawaited(_onResumed());
+    }
+  }
+
+  Future<void> _onResumed() async {
+    if (_stopped) return;
+    await ref.read(notificationInboxProvider.notifier).reload();
+    if (!_socketConnected) {
+      await _connect(forceRefresh: false);
+    }
+  }
+
   Future<void> start() async {
     if (ref.read(sessionNotifierProvider) != SessionStatus.signedIn) return;
     _stopped = false;
+    _attachLifecycle();
     await ref.read(notificationInboxProvider.notifier).reload();
     await _connect(forceRefresh: false);
     await _startPush();
@@ -176,7 +275,7 @@ class NotificationLifecycle extends Notifier<void> {
     ref
         .read(notificationInboxProvider.notifier)
         .upsert(row, json.integer('unread_count'));
-    _present(row, local: false);
+    _present(row, fromSocket: true);
   }
 
   Future<void> _startPush() async {
@@ -211,12 +310,8 @@ class NotificationLifecycle extends Notifier<void> {
 
   Future<void> _prepareLocalNotifications() async {
     if (_localReady) return;
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/launcher_icon',
-    );
-    const ios = DarwinInitializationSettings();
     await _local.initialize(
-      const InitializationSettings(android: androidSettings, iOS: ios),
+      const InitializationSettings(android: _androidInit, iOS: _iosInit),
       onDidReceiveNotificationResponse: (response) =>
           _openPayload(response.payload),
     );
@@ -230,7 +325,8 @@ class NotificationLifecycle extends Notifier<void> {
   }
 
   void _onForeground(RemoteMessage message) {
-    if (_socketConnected) return;
+    // Socket already handled the in-app UX while the app is visible.
+    if (_socketConnected && _resumed) return;
     final row = _fromRemote(message);
     if (row == null) return;
     final inbox = ref.read(notificationInboxProvider);
@@ -238,29 +334,41 @@ class NotificationLifecycle extends Notifier<void> {
     ref
         .read(notificationInboxProvider.notifier)
         .upsert(row, known ? inbox.unreadCount : inbox.unreadCount + 1);
-    _present(row, local: true);
+    _present(row, fromSocket: false);
   }
 
-  void _present(AppNotification row, {required bool local}) {
+  void _present(AppNotification row, {required bool fromSocket}) {
     if (!_presented.add(row.id)) return;
-    if (local) {
+
+    // Minimized / background: always use the system tray.
+    if (!_resumed) {
       unawaited(_showLocal(row));
       return;
     }
+
     final context = rootNavigatorKey.currentContext;
-    if (context == null || !context.mounted) return;
+    if (context == null || !context.mounted) {
+      unawaited(_showLocal(row));
+      return;
+    }
     final location = GoRouter.of(context).state.uri.toString();
     final orderId = row.data['order_id'];
     if (row.data['target'] == 'support' && location.startsWith(Routes.help)) {
       return;
     }
     if (orderId is String && location.contains('/orders/$orderId')) return;
-    showToast(context, row.body.isEmpty ? row.title : row.body);
+
+    if (fromSocket) {
+      showToast(context, row.body.isEmpty ? row.title : row.body);
+      return;
+    }
+    unawaited(_showLocal(row));
   }
 
   Future<void> _showLocal(AppNotification row) async {
     await _prepareLocalNotifications();
     final orderId = row.data['order_id'];
+    final target = row.data['target'];
     await _local.show(
       row.id.hashCode,
       row.title,
@@ -276,7 +384,7 @@ class NotificationLifecycle extends Notifier<void> {
         iOS: DarwinNotificationDetails(),
       ),
       payload:
-          '${row.id}|${orderId is String ? orderId : ''}|${row.data['target'] is String ? row.data['target'] : ''}',
+          '${row.id}|${orderId is String ? orderId : ''}|${target is String ? target : ''}',
     );
   }
 
