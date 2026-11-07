@@ -222,17 +222,12 @@ class ShipmentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          event.title,
+                          event.message.trim().isNotEmpty ? event.message.trim() : event.title,
                           style: AppTypography.bodySmall.copyWith(
                             color: OrdersPalette.ink,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        if (event.message.isNotEmpty)
-                          Text(
-                            event.message,
-                            style: AppTypography.bodySmall.copyWith(color: OrdersPalette.inkSoft),
-                          ),
                         if (event.at != null)
                           Text(
                             Formatters.dateTime(event.at),
