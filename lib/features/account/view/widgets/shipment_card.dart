@@ -152,7 +152,7 @@ class ShipmentCard extends StatelessWidget {
             Text(
               Formatters.decimal(cod) > Formatters.decimal('0')
                   ? 'Cash to pay the rider: ${Formatters.money(cod)}'
-                  : 'Paid online. Nothing to pay the rider.',
+                  : 'Nothing to pay the rider.',
               style: AppTypography.bodySmall.copyWith(color: OrdersPalette.inkSoft),
             ),
           ],

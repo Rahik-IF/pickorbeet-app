@@ -88,32 +88,22 @@ class _InboxState extends ConsumerState<_Inbox> {
 
   void _open(InboxItem item) {
     unawaited(ref.read(notificationInboxProvider.notifier).markRead([item.id]));
-    if (item.link == NotificationLink.help) {
-      context.push(Routes.help);
+    final path = routeForNotification(
+      target: switch (item.link) {
+        NotificationLink.help => 'support',
+        NotificationLink.products => 'product',
+        NotificationLink.wishlist => 'wishlist',
+        NotificationLink.account => 'account',
+        NotificationLink.orders => 'order',
+      },
+      productSlug: item.productSlug,
+      orderId: item.orderId,
+    );
+    if (path == Routes.wishlist || path == Routes.account) {
+      context.go(path);
       return;
     }
-    final orderId = item.orderId;
-    if (orderId != null && orderId.isNotEmpty) {
-      context.push(Routes.order(orderId));
-      return;
-    }
-    final slug = item.productSlug;
-    if (item.link == NotificationLink.products && slug != null && slug.isNotEmpty) {
-      context.push(Routes.product(slug));
-      return;
-    }
-    switch (item.link) {
-      case NotificationLink.orders:
-        context.push(Routes.orders);
-      case NotificationLink.products:
-        context.push(Routes.products);
-      case NotificationLink.wishlist:
-        context.go(Routes.wishlist);
-      case NotificationLink.account:
-        context.go(Routes.account);
-      case NotificationLink.help:
-        context.push(Routes.help);
-    }
+    context.push(path);
   }
 
   @override

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
+import 'package:pickorbeet/core/router/routes.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/features/notifications/notification_repository.dart';
 
@@ -298,6 +299,37 @@ InboxIcon _icon(String kind) => switch (kind) {
       _ when kind.startsWith('system.') => InboxIcon.gear,
       _ => InboxIcon.package,
     };
+
+/// Where a tap should go. A product notification opens that product.
+String routeForNotification({
+  String? kind,
+  String? target,
+  String? productSlug,
+  String? orderId,
+}) {
+  final slug = (productSlug ?? '').trim();
+  final where = (target ?? '').trim();
+  final note = (kind ?? '').trim();
+
+  if (where == 'support' || note.startsWith('support.')) return Routes.help;
+
+  final aboutProduct = where == 'product' ||
+      where == 'products' ||
+      note.startsWith('product.') ||
+      note.startsWith('promo.') ||
+      note.startsWith('price.') ||
+      note.startsWith('arrival.') ||
+      note.startsWith('offer.');
+  if (aboutProduct && slug.isNotEmpty) return Routes.product(slug);
+  if (aboutProduct) return Routes.products;
+
+  final order = (orderId ?? '').trim();
+  if (order.isNotEmpty) return Routes.order(order);
+  if (where == 'order') return Routes.orders;
+  if (where == 'wishlist') return Routes.wishlist;
+  if (where == 'account') return Routes.account;
+  return Routes.notifications;
+}
 
 NotificationLink _link(Object? target) => switch (target) {
       'products' || 'product' => NotificationLink.products,

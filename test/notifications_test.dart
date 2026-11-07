@@ -42,6 +42,36 @@ void main() {
     expect(item.link, NotificationLink.orders);
   });
 
+  test('a product notification opens that product', () {
+    expect(
+      routeForNotification(
+        kind: 'product.arrival',
+        target: 'product',
+        productSlug: 'eufy-360-security-indoor-cam',
+      ),
+      '/product/eufy-360-security-indoor-cam',
+    );
+    expect(
+      routeForNotification(kind: 'promo.sale', productSlug: 'air-max-90'),
+      '/product/air-max-90',
+    );
+    expect(
+      routeForNotification(target: 'products'),
+      '/products',
+    );
+  });
+
+  test('an order notification still opens the order', () {
+    expect(
+      routeForNotification(kind: 'parcel.update', target: 'order', orderId: 'o-1'),
+      '/orders/o-1',
+    );
+    expect(
+      routeForNotification(kind: 'support.reply', target: 'support', productSlug: 'air-max-90'),
+      '/help',
+    );
+  });
+
   test('a new arrival sits with offers and keeps the product photo', () {
     final item = _row('product.arrival', {
       'target': 'product',

@@ -149,6 +149,19 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 bool _firebaseReady = false;
 
+/// A lock-screen tap can arrive before the inbox is ready. Hold it until the app can navigate.
+RemoteMessage? _pendingOpenedMessage;
+void Function(RemoteMessage message)? _openedHandler;
+
+void _deliverOpenedMessage(RemoteMessage message) {
+  final handler = _openedHandler;
+  if (handler == null) {
+    _pendingOpenedMessage = message;
+    return;
+  }
+  handler(message);
+}
+
 /// Starts Firebase when the platform config files are present. Missing files leave push off.
 Future<void> startFirebase() async {
   try {
@@ -157,6 +170,13 @@ Future<void> startFirebase() async {
     // Channels exist before the first push, so FCM never falls back to its own.
     await _trayPlugin(FlutterLocalNotificationsPlugin());
     _firebaseReady = true;
+    try {
+      FirebaseMessaging.onMessageOpenedApp.listen(_deliverOpenedMessage);
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) _deliverOpenedMessage(initial);
+    } on Object {
+      // The inbox and later taps still work if the launch message cannot be read.
+    }
   } on Object {
     _firebaseReady = false;
   }
@@ -183,10 +203,10 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
   StreamSubscription<dynamic>? _socketSub;
   StreamSubscription<String>? _tokenRefresh;
   StreamSubscription<RemoteMessage>? _foreground;
-  StreamSubscription<RemoteMessage>? _opened;
   Timer? _retry;
   int _generation = 0;
   var _stopped = true;
+  var _alive = true;
   var _socketConnected = false;
   var _observingLifecycle = false;
   var _pushAllowed = false;
@@ -203,6 +223,7 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
 
   @override
   void build() {
+    _alive = true;
     final api = ref.read(apiClientProvider);
     final previous = api.beforeSessionExpired;
     api.beforeSessionExpired = () async {
@@ -213,7 +234,20 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
       if (next == SessionStatus.signedIn) unawaited(start());
       if (next == SessionStatus.guest) unawaited(stop());
     });
+    _openedHandler = (message) {
+      if (!_alive) return;
+      _openRemote(message);
+    };
+    final pending = _pendingOpenedMessage;
+    _pendingOpenedMessage = null;
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_alive) _openRemote(pending);
+      });
+    }
     ref.onDispose(() {
+      _alive = false;
+      _openedHandler = null;
       api.beforeSessionExpired = previous;
       _detachLifecycle();
       unawaited(stop());
@@ -290,8 +324,6 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     _tokenRefresh = null;
     await _foreground?.cancel();
     _foreground = null;
-    await _opened?.cancel();
-    _opened = null;
     ref.read(notificationInboxProvider.notifier).clear();
   }
 
@@ -393,12 +425,6 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     _tokenRefresh = messaging.onTokenRefresh.listen(_register);
     await _foreground?.cancel();
     _foreground = FirebaseMessaging.onMessage.listen(_onForeground);
-    await _opened?.cancel();
-    _opened = FirebaseMessaging.onMessageOpenedApp.listen(_openRemote);
-    final initial = await messaging.getInitialMessage();
-    if (initial != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _openRemote(initial));
-    }
   }
 
   Future<void> _register(String token) async {
@@ -468,7 +494,13 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
       title: row.title,
       body: row.body,
       imageUrl: _text(row.data['image']),
-      onTap: () => _go(row.id, orderId, target is String ? target : null, productSlug),
+      onTap: () => _go(
+        row.id,
+        orderId,
+        target is String ? target : null,
+        productSlug,
+        row.kind,
+      ),
     );
     unawaited(_showTray(row, quiet: true));
   }
@@ -487,6 +519,7 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
       _orderIdOf(row),
       target is String ? target : null,
       _text(row.data['product_slug']),
+      row.kind,
     );
   }
 
@@ -500,32 +533,42 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     _go(id, orderId, target, productSlug);
   }
 
-  void _go(String notificationId, String? orderId, String? target, [String? productSlug]) {
-    InAppBanner.hide();
-    unawaited(
-      ref.read(notificationRepositoryProvider).markRead(notificationId),
+  void _go(
+    String notificationId,
+    String? orderId,
+    String? target, [
+    String? productSlug,
+    String? kind,
+  ]) {
+    final path = routeForNotification(
+      kind: kind,
+      target: target,
+      productSlug: productSlug,
+      orderId: orderId,
     );
-    final context = rootNavigatorKey.currentContext;
-    if (context == null || !context.mounted) return;
-    if (target == 'support') {
-      unawaited(dismissTray(supportTrayTag));
-      context.push(Routes.help);
-      return;
-    }
-    if (orderId != null && orderId.isNotEmpty) {
+    InAppBanner.hide();
+    unawaited(ref.read(notificationRepositoryProvider).markRead(notificationId));
+    if (path == Routes.help) unawaited(dismissTray(supportTrayTag));
+    if (orderId != null && orderId.isNotEmpty && path == Routes.order(orderId)) {
       unawaited(dismissTray(orderTrayTag(orderId)));
-      context.push(Routes.order(orderId));
-      return;
     }
-    if (target == 'product' && productSlug != null && productSlug.isNotEmpty) {
-      context.push(Routes.product(productSlug));
-      return;
+    unawaited(_pushWhenReady(path));
+  }
+
+  /// A tap from the lock screen can land before the first frame has a navigator.
+  Future<void> _pushWhenReady(String path) async {
+    for (var attempt = 0; attempt < 40; attempt++) {
+      if (!_alive) return;
+      final context = rootNavigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        final router = GoRouter.of(context);
+        final location = router.state.uri.path;
+        if (location == path) return;
+        router.push(path);
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
     }
-    if (target == 'products') {
-      context.push(Routes.products);
-      return;
-    }
-    context.push(Routes.notifications);
   }
 }
 
