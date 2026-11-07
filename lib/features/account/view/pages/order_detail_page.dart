@@ -17,6 +17,7 @@ import 'package:pickorbeet/features/account/repositories/orders_repository.dart'
 import 'package:pickorbeet/features/account/view/orders_palette.dart';
 import 'package:pickorbeet/features/account/view/widgets/shipment_card.dart';
 import 'package:pickorbeet/features/account/viewmodel/orders_controller.dart';
+import 'package:pickorbeet/features/notifications/notification_realtime.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// One order: what was bought, where it is going, and the Steadfast parcel.
@@ -42,6 +43,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   void initState() {
     super.initState();
     unawaited(_load());
+    unawaited(ref.read(notificationLifecycleProvider.notifier).dismissTray(orderTrayTag(widget.orderId)));
   }
 
   @override
@@ -137,6 +139,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(orderPingProvider, (previous, next) {
+      if (next?.orderId == widget.orderId && !_loading) unawaited(_load());
+    });
     return Scaffold(
       backgroundColor: OrdersPalette.page,
       body: SafeArea(

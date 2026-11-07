@@ -104,6 +104,35 @@ class NotificationRepository {
         (_) {},
       );
 
+  Future<Either<AppFailure, bool>> fetchOffersPreference() async {
+    final result = await guardRequest(
+      () => _api.get('/notifications/preferences/'),
+      asJson,
+    );
+    return result.map((json) => json['offers'] != false);
+  }
+
+  Future<Either<AppFailure, void>> setOffersPreference(bool offers) => guardRequest(
+        () => _api.put('/notifications/preferences/', body: {'offers': offers}),
+        (_) {},
+      );
+
+  Future<Either<AppFailure, void>> replaceWishlist(List<String> productIds) => guardRequest(
+        () => _api.put('/products/wishlist/', body: {'product_ids': productIds}),
+        (_) {},
+      );
+
+  Future<Either<AppFailure, void>> saveWishlistProduct(String productId) => guardRequest(
+        () => _api.put('/products/wishlist/$productId/'),
+        (_) {},
+      );
+
+  Future<Either<AppFailure, void>> dropWishlistProduct(String productId) => guardRequest(
+        () => _api.delete('/products/wishlist/$productId/'),
+        (_) {},
+        success: const {204},
+      );
+
   Future<Either<AppFailure, void>> unregisterThisDevice() async {
     final id = _ref.read(sharedPreferencesProvider).getString(_deviceKey);
     if (id == null || id.isEmpty) return const Right(null);

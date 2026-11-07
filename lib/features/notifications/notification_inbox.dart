@@ -37,6 +37,8 @@ class InboxItem {
     this.highlight,
     this.thumb,
     this.orderId,
+    this.imageUrl,
+    this.productSlug,
   });
 
   final String id;
@@ -51,6 +53,8 @@ class InboxItem {
   final InboxThumb? thumb;
   final bool unread;
   final String? orderId;
+  final String? imageUrl;
+  final String? productSlug;
 
   InboxItem copyWith({bool? unread}) => InboxItem(
         id: id,
@@ -65,6 +69,8 @@ class InboxItem {
         highlight: highlight,
         thumb: thumb,
         orderId: orderId,
+        imageUrl: imageUrl,
+        productSlug: productSlug,
       );
 }
 
@@ -172,9 +178,16 @@ class NotificationInbox extends Notifier<InboxState> {
   }
 
   void toggle(InboxChannel channel) {
-    final next = {...state.channels, channel: !(state.channels[channel] ?? true)};
+    setChannel(channel, !(state.channels[channel] ?? true));
+  }
+
+  void setChannel(InboxChannel channel, bool on, {bool sync = true}) {
+    final next = {...state.channels, channel: on};
     state = state.copyWith(channels: next);
     unawaited(ref.read(sharedPreferencesProvider).setString(_channelKey, _writeChannels(next)));
+    if (sync && channel == InboxChannel.offers) {
+      unawaited(ref.read(notificationRepositoryProvider).setOffersPreference(on));
+    }
   }
 
   void clear() {
@@ -231,6 +244,8 @@ extension AppNotificationInbox on AppNotification {
     final code = data['code'];
     final highlight = code is String && code.isNotEmpty && body.contains(code) ? code : null;
     final orderId = data['order_id'];
+    final image = data['image'];
+    final slug = data['product_slug'];
     return InboxItem(
       id: id,
       group: _group(createdAt),
@@ -244,15 +259,24 @@ extension AppNotificationInbox on AppNotification {
       thumb: _thumb(data['thumb']),
       unread: readAt == null,
       orderId: orderId is String && orderId.isNotEmpty ? orderId : null,
+      imageUrl: image is String && image.isNotEmpty ? image : null,
+      productSlug: slug is String && slug.isNotEmpty ? slug : null,
     );
   }
 }
 
 InboxChannel _channel(String kind) {
-  if (kind.startsWith('order.') || kind.startsWith('payment.') || kind.startsWith('refund.')) {
+  if (kind.startsWith('order.') ||
+      kind.startsWith('parcel.') ||
+      kind.startsWith('payment.') ||
+      kind.startsWith('refund.')) {
     return InboxChannel.orders;
   }
-  if (kind.startsWith('offer.') || kind.startsWith('promo.') || kind.startsWith('price.') || kind.startsWith('arrival.')) {
+  if (kind.startsWith('offer.') ||
+      kind.startsWith('promo.') ||
+      kind.startsWith('product.') ||
+      kind.startsWith('price.') ||
+      kind.startsWith('arrival.')) {
     return InboxChannel.offers;
   }
   if (kind.startsWith('account.')) return InboxChannel.account;
@@ -261,9 +285,12 @@ InboxChannel _channel(String kind) {
 }
 
 InboxIcon _icon(String kind) => switch (kind) {
-      'order.shipped' || 'order.out_for_delivery' || 'order.delivered' => InboxIcon.truck,
+      'order.shipped' || 'order.out_for_delivery' || 'order.delivered' || 'parcel.update' => InboxIcon.truck,
       'payment.paid' || 'payment.failed' || 'refund.requested' || 'refund.completed' => InboxIcon.clipboard,
       'support.reply' => InboxIcon.megaphone,
+      'product.arrival' => InboxIcon.star,
+      'product.price_drop' || 'promo.sale' => InboxIcon.tag,
+      'product.low_stock' || 'product.back_in_stock' => InboxIcon.heart,
       _ when kind.startsWith('offer.') || kind.startsWith('promo.') => InboxIcon.tag,
       _ when kind.startsWith('price.') => InboxIcon.heart,
       _ when kind.startsWith('arrival.') => InboxIcon.star,
@@ -273,7 +300,7 @@ InboxIcon _icon(String kind) => switch (kind) {
     };
 
 NotificationLink _link(Object? target) => switch (target) {
-      'products' => NotificationLink.products,
+      'products' || 'product' => NotificationLink.products,
       'wishlist' => NotificationLink.wishlist,
       'account' => NotificationLink.account,
       'support' => NotificationLink.help,

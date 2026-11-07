@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pickorbeet/core/constants/server_constant.dart';
 import 'package:pickorbeet/core/network/json.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
 import 'package:pickorbeet/features/notifications/notification_inbox.dart';
+import 'package:pickorbeet/features/notifications/notification_realtime.dart';
 import 'package:pickorbeet/features/support/help_models.dart';
 import 'package:pickorbeet/features/support/support_repository.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -60,19 +62,37 @@ class HelpChatController extends AutoDisposeNotifier<HelpChatState> {
   StreamSubscription<dynamic>? _socketSub;
   Timer? _retry;
   Timer? _typingClear;
+  AppLifecycleListener? _lifecycle;
+
+  /// A reply only counts as read while the customer can see the chat.
+  bool get _onScreen => WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
   @override
   HelpChatState build() {
+    _lifecycle = AppLifecycleListener(onResume: _onResume);
     ref.onDispose(() {
       _alive = false;
+      _lifecycle?.dispose();
       _stop();
     });
     return const HelpChatState();
   }
 
+  /// Back on the open chat: catch up on replies, which also marks them read.
+  void _onResume() {
+    if (_stopped || !_alive) return;
+    _dismissTray();
+    unawaited(_reload());
+  }
+
+  void _dismissTray() {
+    unawaited(ref.read(notificationLifecycleProvider.notifier).dismissTray(supportTrayTag));
+  }
+
   Future<void> open(String orderNumber) async {
     _orderNumber = orderNumber;
     _stopped = false;
+    _dismissTray();
     state = state.copyWith(loading: true, error: '');
     final result = await ref.read(supportRepositoryProvider).fetchThread();
     if (!_alive) return;
@@ -221,7 +241,7 @@ class HelpChatController extends AutoDisposeNotifier<HelpChatState> {
         if (row == null) return;
         final message = HelpMessage.fromJson(row);
         _upsert(message);
-        if (!message.fromCustomer) {
+        if (!message.fromCustomer && _onScreen) {
           unawaited(_markRead());
         }
       case 'message.read':

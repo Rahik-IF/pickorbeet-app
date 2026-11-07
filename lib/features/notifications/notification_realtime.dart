@@ -12,85 +12,139 @@ import 'package:pickorbeet/core/constants/server_constant.dart';
 import 'package:pickorbeet/core/network/json.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
 import 'package:pickorbeet/core/providers/session_notifier.dart';
+import 'package:pickorbeet/core/providers/wishlist_notifier.dart';
 import 'package:pickorbeet/core/router/app_router.dart';
 import 'package:pickorbeet/core/router/routes.dart';
-import 'package:pickorbeet/core/widgets/toast.dart';
+import 'package:pickorbeet/core/theme/app_pallete.dart';
+import 'package:pickorbeet/features/account/viewmodel/orders_controller.dart';
+import 'package:pickorbeet/features/notifications/in_app_banner.dart';
 import 'package:pickorbeet/features/notifications/notification_inbox.dart';
 import 'package:pickorbeet/features/notifications/notification_repository.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+// Channel ids, the icon name and the tray tags must match what the server sends to FCM,
+// so a tray entry the app posts and one Android posts from a push replace each other.
 const _ordersChannel = AndroidNotificationChannel(
   'orders',
-  'Orders',
-  description: 'Order and payment updates',
+  'Orders and deliveries',
+  description: 'Order, payment and delivery updates',
   importance: Importance.high,
 );
 
-const _androidInit = AndroidInitializationSettings('@mipmap/launcher_icon');
-const _iosInit = DarwinInitializationSettings();
+const _supportChannel = AndroidNotificationChannel(
+  'support',
+  'Help chat',
+  description: 'Replies from PickOrbeet support',
+  importance: Importance.high,
+);
 
-/// Creates the Android tray channel early so FCM can target `orders` before sign-in.
-Future<void> ensureOrdersNotificationChannel() async {
-  final plugin = FlutterLocalNotificationsPlugin();
-  await plugin.initialize(
-    const InitializationSettings(android: _androidInit, iOS: _iosInit),
-  );
-  final android = plugin.resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>();
-  await android?.createNotificationChannel(_ordersChannel);
+const _offersChannel = AndroidNotificationChannel(
+  'offers',
+  'New arrivals and offers',
+  description: 'New products, stock alerts and sales',
+  importance: Importance.high,
+);
+
+const _smallIcon = 'ic_stat_notify';
+const _androidInit = AndroidInitializationSettings(_smallIcon);
+const _iosInit = DarwinInitializationSettings(
+  requestAlertPermission: false,
+  requestBadgePermission: false,
+  requestSoundPermission: false,
+);
+
+/// Android posts FCM tray entries under id 0 when they carry a tag.
+const _trayId = 0;
+
+const supportTrayTag = 'support';
+
+String orderTrayTag(String orderId) => 'order-$orderId';
+
+/// The tray tag for a notification: one entry per order, one for the Help chat.
+String trayTagFor(AppNotification row) {
+  final sent = row.data['tag'];
+  if (sent is String && sent.isNotEmpty) return sent;
+  if (row.kind.startsWith('support.')) return supportTrayTag;
+  final campaignId = row.data['campaign_id'];
+  if (campaignId is String && campaignId.isNotEmpty) return 'campaign-$campaignId';
+  final orderId = row.data['order_id'];
+  if (orderId is String && orderId.isNotEmpty) return orderTrayTag(orderId);
+  return 'note-${row.id}';
 }
 
-Future<void> _showTrayNotification({
-  required String id,
-  required String title,
-  required String body,
-  String orderId = '',
-  String target = '',
+AndroidNotificationChannel _channelFor(AppNotification row) {
+  if (row.kind.startsWith('support.')) return _supportChannel;
+  if (row.kind.startsWith('product.') || row.kind.startsWith('promo.')) return _offersChannel;
+  return _ordersChannel;
+}
+
+Future<FlutterLocalNotificationsPlugin> _trayPlugin(
+  FlutterLocalNotificationsPlugin plugin, {
+  DidReceiveNotificationResponseCallback? onOpen,
 }) async {
-  final plugin = FlutterLocalNotificationsPlugin();
   await plugin.initialize(
     const InitializationSettings(android: _androidInit, iOS: _iosInit),
+    onDidReceiveNotificationResponse: onOpen,
   );
-  final android = plugin.resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>();
+  final android = plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await android?.createNotificationChannel(_ordersChannel);
-  await plugin.show(
-    id.hashCode,
-    title,
-    body,
-    const NotificationDetails(
+  await android?.createNotificationChannel(_supportChannel);
+  await android?.createNotificationChannel(_offersChannel);
+  return plugin;
+}
+
+/// Posts [row] in the tray the way a push from the server looks. A [quiet] entry
+/// makes no sound and no heads-up, for when the banner inside the app already showed it.
+Future<void> _postTray(FlutterLocalNotificationsPlugin plugin, AppNotification row, {bool quiet = false}) {
+  final channel = _channelFor(row);
+  final orderId = row.data['order_id'];
+  final target = row.data['target'];
+  final productSlug = row.data['product_slug'];
+  final chat = channel.id == _supportChannel.id;
+  return plugin.show(
+    _trayId,
+    row.title,
+    row.body,
+    NotificationDetails(
       android: AndroidNotificationDetails(
-        'orders',
-        'Orders',
-        channelDescription: 'Order and payment updates',
+        channel.id,
+        channel.name,
+        channelDescription: channel.description,
         importance: Importance.high,
         priority: Priority.high,
+        icon: _smallIcon,
+        color: AppPallete.primary,
+        tag: trayTagFor(row),
+        when: row.createdAt.millisecondsSinceEpoch,
+        category: chat ? AndroidNotificationCategory.message : AndroidNotificationCategory.status,
+        styleInformation: BigTextStyleInformation(row.body, contentTitle: row.title),
+        ticker: row.title,
+        silent: quiet,
       ),
-      iOS: DarwinNotificationDetails(),
+      iOS: DarwinNotificationDetails(
+        threadIdentifier: channel.id,
+        presentBanner: !quiet,
+        presentList: true,
+        presentSound: !quiet,
+      ),
     ),
-    payload: '$id|$orderId|$target',
+    payload:
+        '${row.id}|${orderId is String ? orderId : ''}|${target is String ? target : ''}|${productSlug is String ? productSlug : ''}',
   );
 }
 
-/// Shown by the system when a message arrives and the app is not in the foreground.
+/// Runs when a push arrives while the app is not in the foreground.
 ///
-/// When FCM includes a notification payload, Android/iOS already post the tray
-/// item. This handler only fills the gap for data-only pushes.
+/// Pushes from the server carry a notification payload, which Android and iOS post
+/// themselves. This handler only fills the gap for data-only pushes.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   if (message.notification != null) return;
   final row = _fromRemote(message);
   if (row == null) return;
-  final orderId = row.data['order_id'];
-  final target = row.data['target'];
-  await _showTrayNotification(
-    id: row.id,
-    title: row.title,
-    body: row.body,
-    orderId: orderId is String ? orderId : '',
-    target: target is String ? target : '',
-  );
+  final plugin = await _trayPlugin(FlutterLocalNotificationsPlugin());
+  await _postTray(plugin, row);
 }
 
 bool _firebaseReady = false;
@@ -100,14 +154,30 @@ Future<void> startFirebase() async {
   try {
     await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    await ensureOrdersNotificationChannel();
+    // Channels exist before the first push, so FCM never falls back to its own.
+    await _trayPlugin(FlutterLocalNotificationsPlugin());
     _firebaseReady = true;
   } on Object {
     _firebaseReady = false;
   }
 }
 
-/// Keeps the live socket and the phone token in step with the signed-in session.
+/// The last order a live notification was about, so an open order page can reload.
+typedef OrderPing = ({String orderId, int seq});
+
+class OrderPings extends Notifier<OrderPing?> {
+  var _seq = 0;
+
+  @override
+  OrderPing? build() => null;
+
+  void ping(String orderId) => state = (orderId: orderId, seq: ++_seq);
+}
+
+final orderPingProvider = NotifierProvider<OrderPings, OrderPing?>(OrderPings.new);
+
+/// Keeps the live socket and the phone token in step with the signed-in session,
+/// and shows each new notification once: a banner in the app, or the tray outside it.
 class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
   WebSocketChannel? _socket;
   StreamSubscription<dynamic>? _socketSub;
@@ -119,12 +189,17 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
   var _stopped = true;
   var _socketConnected = false;
   var _observingLifecycle = false;
+  var _pushAllowed = false;
+  var _pushRegistered = false;
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   final _presented = <String>{};
   final _local = FlutterLocalNotificationsPlugin();
   var _localReady = false;
 
   bool get _resumed => _lifecycle == AppLifecycleState.resumed;
+
+  /// Android or iOS post this phone's pushes while the app is in the background.
+  bool get _pushActive => _firebaseReady && _pushAllowed && _pushRegistered;
 
   @override
   void build() {
@@ -183,9 +258,21 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     if (ref.read(sessionNotifierProvider) != SessionStatus.signedIn) return;
     _stopped = false;
     _attachLifecycle();
+    await _prepareLocalNotifications();
     await ref.read(notificationInboxProvider.notifier).reload();
+    await _syncOffersPreference();
+    unawaited(
+      ref.read(notificationRepositoryProvider).replaceWishlist(ref.read(wishlistNotifierProvider)),
+    );
     await _connect(forceRefresh: false);
     await _startPush();
+  }
+
+  Future<void> _syncOffersPreference() async {
+    final result = await ref.read(notificationRepositoryProvider).fetchOffersPreference();
+    result.match((_) {}, (offers) {
+      ref.read(notificationInboxProvider.notifier).setChannel(InboxChannel.offers, offers, sync: false);
+    });
   }
 
   Future<void> stop() async {
@@ -193,6 +280,8 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     _generation++;
     _retry?.cancel();
     _socketConnected = false;
+    _pushRegistered = false;
+    InAppBanner.hide();
     await _socketSub?.cancel();
     _socketSub = null;
     await _socket?.sink.close();
@@ -204,6 +293,16 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     await _opened?.cancel();
     _opened = null;
     ref.read(notificationInboxProvider.notifier).clear();
+  }
+
+  /// Removes the tray entry for [tag], whether the app or a push posted it.
+  Future<void> dismissTray(String tag) async {
+    if (!_localReady) return;
+    try {
+      await _local.cancel(_trayId, tag: tag);
+    } on Object {
+      // Nothing to remove, or the platform does not support tags.
+    }
   }
 
   Future<void> _connect({required bool forceRefresh}) async {
@@ -275,14 +374,19 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     ref
         .read(notificationInboxProvider.notifier)
         .upsert(row, json.integer('unread_count'));
-    _present(row, fromSocket: true);
+    _present(row, fromPush: false);
   }
 
   Future<void> _startPush() async {
-    if (!_firebaseReady) return;
-    await _prepareLocalNotifications();
+    if (!_firebaseReady) {
+      final android = _local.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await android?.requestNotificationsPermission();
+      return;
+    }
     final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission();
+    final settings = await messaging.requestPermission();
+    _pushAllowed = settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
     final token = await messaging.getToken();
     if (token != null) await _register(token);
     await _tokenRefresh?.cancel();
@@ -301,32 +405,21 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     if (_stopped) return;
     final repo = ref.read(notificationRepositoryProvider);
     final id = await repo.deviceId();
-    await repo.registerDevice(
+    final result = await repo.registerDevice(
       token: token,
       platform: Platform.isIOS ? 'ios' : 'android',
       deviceId: id,
     );
+    _pushRegistered = result.isRight();
   }
 
   Future<void> _prepareLocalNotifications() async {
     if (_localReady) return;
-    await _local.initialize(
-      const InitializationSettings(android: _androidInit, iOS: _iosInit),
-      onDidReceiveNotificationResponse: (response) =>
-          _openPayload(response.payload),
-    );
-    final androidPlugin = _local
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-    await androidPlugin?.createNotificationChannel(_ordersChannel);
-    await androidPlugin?.requestNotificationsPermission();
+    await _trayPlugin(_local, onOpen: (response) => _openPayload(response.payload));
     _localReady = true;
   }
 
   void _onForeground(RemoteMessage message) {
-    // Socket already handled the in-app UX while the app is visible.
-    if (_socketConnected && _resumed) return;
     final row = _fromRemote(message);
     if (row == null) return;
     final inbox = ref.read(notificationInboxProvider);
@@ -334,69 +427,66 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     ref
         .read(notificationInboxProvider.notifier)
         .upsert(row, known ? inbox.unreadCount : inbox.unreadCount + 1);
-    _present(row, fromSocket: false);
+    _present(row, fromPush: true);
   }
 
-  void _present(AppNotification row, {required bool fromSocket}) {
+  /// The socket and FCM can both bring the same row; whichever arrives first shows it.
+  void _present(AppNotification row, {required bool fromPush}) {
     if (!_presented.add(row.id)) return;
+    final orderId = _orderIdOf(row);
+    if (orderId != null) {
+      ref.read(orderPingProvider.notifier).ping(orderId);
+      ref.invalidate(ordersControllerProvider);
+    }
 
-    // Minimized / background: always use the system tray.
     if (!_resumed) {
-      unawaited(_showLocal(row));
+      // In the background Android or iOS post the push themselves. While the app is
+      // only inactive (the shade is open over it) FCM counts it as foreground and does not.
+      final systemPostsIt = !fromPush && _pushActive && _lifecycle != AppLifecycleState.inactive;
+      if (!systemPostsIt) unawaited(_showTray(row));
       return;
     }
 
+    final navigator = rootNavigatorKey.currentState;
     final context = rootNavigatorKey.currentContext;
-    if (context == null || !context.mounted) {
-      unawaited(_showLocal(row));
+    if (navigator == null || context == null || !context.mounted) {
+      unawaited(_showTray(row));
       return;
     }
     final location = GoRouter.of(context).state.uri.toString();
-    final orderId = row.data['order_id'];
-    if (row.data['target'] == 'support' && location.startsWith(Routes.help)) {
-      return;
-    }
-    if (orderId is String && location.contains('/orders/$orderId')) return;
+    final target = row.data['target'];
+    // The open chat or order page already shows the update live.
+    if (target == 'support' && location.startsWith(Routes.help)) return;
+    if (orderId != null && location.contains(Routes.order(orderId))) return;
 
-    if (fromSocket) {
-      showToast(context, row.body.isEmpty ? row.title : row.body);
-      return;
-    }
-    unawaited(_showLocal(row));
+    final productSlug = _text(row.data['product_slug']);
+    if (productSlug != null && location.contains(Routes.product(productSlug))) return;
+
+    InAppBanner.show(
+      navigator.overlay!,
+      look: NotificationLook.of(row.kind, parcelStatus: _text(row.data['parcel_status']) ?? ''),
+      title: row.title,
+      body: row.body,
+      imageUrl: _text(row.data['image']),
+      onTap: () => _go(row.id, orderId, target is String ? target : null, productSlug),
+    );
+    unawaited(_showTray(row, quiet: true));
   }
 
-  Future<void> _showLocal(AppNotification row) async {
+  Future<void> _showTray(AppNotification row, {bool quiet = false}) async {
     await _prepareLocalNotifications();
-    final orderId = row.data['order_id'];
-    final target = row.data['target'];
-    await _local.show(
-      row.id.hashCode,
-      row.title,
-      row.body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'orders',
-          'Orders',
-          channelDescription: 'Order and payment updates',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      payload:
-          '${row.id}|${orderId is String ? orderId : ''}|${target is String ? target : ''}',
-    );
+    await _postTray(_local, row, quiet: quiet);
   }
 
   void _openRemote(RemoteMessage message) {
     final row = _fromRemote(message);
     if (row == null) return;
-    final orderId = row.data['order_id'];
     final target = row.data['target'];
     _go(
       row.id,
-      orderId is String ? orderId : null,
+      _orderIdOf(row),
       target is String ? target : null,
+      _text(row.data['product_slug']),
     );
   }
 
@@ -406,21 +496,33 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
     final id = parts.first;
     final orderId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
     final target = parts.length > 2 && parts[2].isNotEmpty ? parts[2] : null;
-    _go(id, orderId, target);
+    final productSlug = parts.length > 3 && parts[3].isNotEmpty ? parts[3] : null;
+    _go(id, orderId, target, productSlug);
   }
 
-  void _go(String notificationId, String? orderId, String? target) {
+  void _go(String notificationId, String? orderId, String? target, [String? productSlug]) {
+    InAppBanner.hide();
     unawaited(
       ref.read(notificationRepositoryProvider).markRead(notificationId),
     );
     final context = rootNavigatorKey.currentContext;
     if (context == null || !context.mounted) return;
     if (target == 'support') {
+      unawaited(dismissTray(supportTrayTag));
       context.push(Routes.help);
       return;
     }
     if (orderId != null && orderId.isNotEmpty) {
+      unawaited(dismissTray(orderTrayTag(orderId)));
       context.push(Routes.order(orderId));
+      return;
+    }
+    if (target == 'product' && productSlug != null && productSlug.isNotEmpty) {
+      context.push(Routes.product(productSlug));
+      return;
+    }
+    if (target == 'products') {
+      context.push(Routes.products);
       return;
     }
     context.push(Routes.notifications);
@@ -429,6 +531,8 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
 
 final notificationLifecycleProvider =
     NotifierProvider<NotificationLifecycle, void>(NotificationLifecycle.new);
+
+String? _orderIdOf(AppNotification row) => _text(row.data['order_id']);
 
 AppNotification? _fromRemote(RemoteMessage message) {
   final data = message.data;
@@ -440,13 +544,11 @@ AppNotification? _fromRemote(RemoteMessage message) {
     title: message.notification?.title ?? _text(data['title']) ?? 'PickOrbeet',
     body: message.notification?.body ?? _text(data['body']) ?? '',
     data: {
-      'order_id': _text(data['order_id']),
-      'order_number': _text(data['order_number']),
-      'target': _text(data['target']),
-      'status': _text(data['status']),
+      for (final entry in data.entries)
+        if (entry.value is String && (entry.value as String).isNotEmpty) entry.key: entry.value,
     },
     readAt: null,
-    createdAt: DateTime.now(),
+    createdAt: message.sentTime ?? DateTime.now(),
   );
 }
 

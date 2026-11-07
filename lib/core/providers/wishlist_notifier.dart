@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:pickorbeet/core/providers/core_providers.dart';
+import 'package:pickorbeet/features/notifications/notification_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'wishlist_notifier.g.dart';
@@ -60,6 +61,12 @@ class WishlistNotifier extends _$WishlistNotifier {
   void _save(List<String> ids) {
     state = ids;
     unawaited(ref.read(sharedPreferencesProvider).setStringList(_key, ids));
+    try {
+      if (ref.read(authLocalRepositoryProvider).getAccessToken() == null) return;
+      unawaited(ref.read(notificationRepositoryProvider).replaceWishlist(ids));
+    } on Object {
+      // Widget tests override the session; signed-out phones have no token.
+    }
   }
 }
 

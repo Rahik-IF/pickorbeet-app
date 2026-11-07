@@ -14,6 +14,7 @@ import 'package:pickorbeet/core/theme/app_pallete.dart';
 import 'package:pickorbeet/core/theme/app_spacing.dart';
 import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/widgets/app_header.dart';
+import 'package:pickorbeet/core/widgets/app_network_image.dart';
 import 'package:pickorbeet/core/widgets/bottom_nav.dart';
 import 'package:pickorbeet/core/widgets/header_actions.dart';
 import 'package:pickorbeet/features/notifications/notification_inbox.dart';
@@ -94,6 +95,11 @@ class _InboxState extends ConsumerState<_Inbox> {
     final orderId = item.orderId;
     if (orderId != null && orderId.isNotEmpty) {
       context.push(Routes.order(orderId));
+      return;
+    }
+    final slug = item.productSlug;
+    if (item.link == NotificationLink.products && slug != null && slug.isNotEmpty) {
+      context.push(Routes.product(slug));
       return;
     }
     switch (item.link) {
@@ -394,16 +400,26 @@ class _Card extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
+                  SizedBox(
                     width: 42,
                     height: 42,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: tint.background, borderRadius: const BorderRadius.all(Radius.circular(12))),
-                    child: Icon(tint.icon, size: 22, color: tint.foreground),
+                    child: item.imageUrl == null
+                        ? Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: tint.background,
+                              borderRadius: const BorderRadius.all(Radius.circular(12)),
+                            ),
+                            child: Icon(tint.icon, size: 22, color: tint.foreground),
+                          )
+                        : AppNetworkImage(
+                            url: item.imageUrl,
+                            borderRadius: const BorderRadius.all(Radius.circular(12)),
+                          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(child: _Copy(item: item)),
-                  if (item.thumb != null) ...[
+                  if (item.imageUrl == null && item.thumb != null) ...[
                     const SizedBox(width: 8),
                     _Thumb(kind: item.thumb!),
                   ],
