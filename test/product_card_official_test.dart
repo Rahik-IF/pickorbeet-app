@@ -17,7 +17,6 @@ ProductSummary _product({required bool official, int discount = 0, String? compa
     price: '1080',
     comparePrice: compare,
     discountPercentage: discount,
-    stockQuantity: 4,
     isOutOfStock: false,
     isFeatured: false,
     categoryName: 'Electronics',

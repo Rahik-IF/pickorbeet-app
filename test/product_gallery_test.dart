@@ -15,7 +15,6 @@ ProductDetail _detail({
       shortDescription: '',
       price: '100.00',
       discountPercentage: 0,
-      stockQuantity: 5,
       isOutOfStock: false,
       isFeatured: false,
       categoryName: 'Apparel',
@@ -53,7 +52,6 @@ void main() {
     const white = ProductVariant(
       id: 'v-white',
       price: '100.00',
-      stockQuantity: 2,
       isActive: true,
       color: 'White',
       options: [VariantChoice(name: 'Color', kind: 'swatch', label: 'White')],
@@ -61,7 +59,6 @@ void main() {
     const black = ProductVariant(
       id: 'v-black',
       price: '100.00',
-      stockQuantity: 2,
       isActive: true,
       color: 'Black',
       options: [VariantChoice(name: 'Color', kind: 'swatch', label: 'Black')],
@@ -99,7 +96,6 @@ void main() {
     const whiteM = ProductVariant(
       id: 'v-white-m',
       price: '100.00',
-      stockQuantity: 2,
       isActive: true,
       options: [
         VariantChoice(name: 'Size', label: 'M'),
@@ -109,7 +105,6 @@ void main() {
     const whiteL = ProductVariant(
       id: 'v-white-l',
       price: '100.00',
-      stockQuantity: 2,
       isActive: true,
       options: [
         VariantChoice(name: 'Size', label: 'L'),
@@ -119,7 +114,6 @@ void main() {
     const blackM = ProductVariant(
       id: 'v-black-m',
       price: '100.00',
-      stockQuantity: 2,
       isActive: true,
       options: [
         VariantChoice(name: 'Size', label: 'M'),
@@ -165,7 +159,6 @@ void main() {
     const white = ProductVariant(
       id: 'v-white',
       price: '100.00',
-      stockQuantity: 2,
       isActive: true,
       color: 'White',
       options: [VariantChoice(name: 'Color', kind: 'swatch', label: 'White')],
@@ -196,7 +189,6 @@ void main() {
     const white = ProductVariant(
       id: 'v-white',
       price: '100.00',
-      stockQuantity: 2,
       isActive: true,
       color: 'White',
       options: [VariantChoice(name: 'Color', kind: 'swatch', label: 'White')],
@@ -209,7 +201,6 @@ void main() {
         shortDescription: '',
         price: '100.00',
         discountPercentage: 0,
-        stockQuantity: 5,
         isOutOfStock: false,
         isFeatured: false,
         categoryName: 'Apparel',

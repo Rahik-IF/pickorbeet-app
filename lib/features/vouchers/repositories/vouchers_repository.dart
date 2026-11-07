@@ -16,8 +16,12 @@ class VouchersRepository {
 
   final ApiClient _api;
 
-  Future<Either<AppFailure, List<StoreVoucher>>> list() => guardRequest(
-        () => _api.get('/orders/coupons/'),
+  /// With [itemIds], each available voucher says whether it covers those cart lines.
+  Future<Either<AppFailure, List<StoreVoucher>>> list({List<String>? itemIds}) => guardRequest(
+        () => _api.get(
+          '/orders/coupons/',
+          query: {if (itemIds != null) 'item_ids': itemIds.join(',')},
+        ),
         (body) {
           final rows = asJsonList(body);
           return [

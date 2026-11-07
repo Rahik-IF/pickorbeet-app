@@ -155,9 +155,8 @@ class ProductVariant {
   const ProductVariant({
     required this.id,
     required this.price,
-    required this.stockQuantity,
     required this.isActive,
-    this.lowStockThreshold = 10,
+    this.available = true,
     this.size,
     this.color,
     this.options = const [],
@@ -168,8 +167,7 @@ class ProductVariant {
     size: map.strOrNull('size'),
     color: map.strOrNull('color'),
     price: map.money('effective_price', map.money('price')),
-    stockQuantity: map.integer('stock_quantity'),
-    lowStockThreshold: map.integer('low_stock_threshold', 10),
+    available: map.str('availability', 'in_stock') == 'in_stock',
     isActive: map.boolean('is_active', true),
     options: map.listOf('options', VariantChoice.fromMap),
   );
@@ -178,14 +176,13 @@ class ProductVariant {
   final String? size;
   final String? color;
   final String price;
-  final int stockQuantity;
-  final int lowStockThreshold;
+
+  /// The shop can supply it now. Shoppers never see how many are left.
+  final bool available;
   final bool isActive;
   final List<VariantChoice> options;
 
-  bool get inStock => isActive && stockQuantity > 0;
-
-  bool get isLowStock => inStock && stockQuantity <= lowStockThreshold;
+  bool get inStock => isActive && available;
 
   String get label {
     if (options.isNotEmpty) {
@@ -238,9 +235,7 @@ class ProductSummary {
     required this.price,
     this.sku = '',
     required this.discountPercentage,
-    required this.stockQuantity,
     required this.isOutOfStock,
-    this.isLowStock = false,
     required this.isFeatured,
     required this.categoryName,
     required this.variants,
@@ -273,9 +268,7 @@ class ProductSummary {
           ? gallery
           : [if (primary != null && primary.isNotEmpty) primary],
       discountPercentage: map.integer('discount_percentage'),
-      stockQuantity: map.integer('stock_quantity'),
-      isOutOfStock: map.boolean('is_out_of_stock'),
-      isLowStock: map.boolean('is_low_stock'),
+      isOutOfStock: map.str('availability') == 'out_of_stock' || map.boolean('is_out_of_stock'),
       isFeatured: map.boolean('is_featured'),
       categoryName: map.str('category_name'),
       subcategoryName: map.strOrNull('subcategory_name'),
@@ -299,9 +292,7 @@ class ProductSummary {
   /// Product / variant photo URLs for card autoplay. Falls back to [primaryImage].
   final List<String> galleryImages;
   final int discountPercentage;
-  final int stockQuantity;
   final bool isOutOfStock;
-  final bool isLowStock;
   final bool isFeatured;
   final String categoryName;
   final String? subcategoryName;

@@ -89,6 +89,7 @@ class OrderDetail {
     this.notes,
     this.createdAt,
     this.shipment,
+    this.invoiceAvailable = false,
   });
 
   final String id;
@@ -108,6 +109,9 @@ class OrderDetail {
   final List<OrderLine> items;
   final List<StatusEntry> history;
   final Shipment? shipment;
+
+  /// The server has an invoice PDF once the order has shipped.
+  final bool invoiceAvailable;
 
   String get displayNumber {
     final number = orderNumber.trim();
@@ -142,6 +146,7 @@ class OrderDetail {
       items: map.listOf('items', OrderLine.fromMap),
       history: map.listOf('status_history', StatusEntry.fromMap),
       shipment: map.obj('shipment') == null ? null : Shipment.fromMap(map.obj('shipment')!),
+      invoiceAvailable: map.boolean('invoice_available'),
     );
   }
 }

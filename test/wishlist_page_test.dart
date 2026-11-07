@@ -18,7 +18,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 ProductVariant _color(String color) => ProductVariant(
       id: 'variant-$color',
       price: '1',
-      stockQuantity: 4,
       isActive: true,
       color: color,
     );
@@ -44,7 +43,6 @@ ProductSummary _product({
     price: price,
     comparePrice: compare,
     discountPercentage: discount,
-    stockQuantity: 8,
     isOutOfStock: false,
     isFeatured: false,
     categoryName: category,

@@ -35,8 +35,7 @@ void main() {
       'price': '1890.00',
       'compare_price': '2360.00',
       'discount_percentage': 20,
-      'stock_quantity': 4,
-      'is_low_stock': true,
+      'availability': 'in_stock',
       'is_out_of_stock': false,
       'is_featured': false,
       'rating_average': 4.7,
@@ -82,8 +81,7 @@ void main() {
           'color': 'Black',
           'price': '1890.00',
           'effective_price': '1890.00',
-          'stock_quantity': 4,
-          'low_stock_threshold': 10,
+          'availability': 'out_of_stock',
           'is_active': true,
         },
       ],
@@ -98,13 +96,12 @@ void main() {
     expect(detail.summary.warrantyPeriod, '1 year');
     expect(detail.summary.categoryName, 'Watches');
     expect(detail.summary.subcategoryName, 'Smart');
-    expect(detail.summary.isLowStock, isTrue);
+    expect(detail.summary.isOutOfStock, isFalse);
     expect(detail.categorySlug, 'watches');
     expect(detail.subcategorySlug, 'smart');
     expect(detail.gallery, ['/media/a.jpg', '/media/b.jpg']);
     expect(detail.plainDescription, 'Light watch');
-    expect(detail.summary.variants.single.isLowStock, isTrue);
-    expect(detail.summary.variants.single.lowStockThreshold, 10);
+    expect(detail.summary.variants.single.inStock, isFalse);
     expect(detail.specifications, hasLength(2));
     expect(
       detail.specs,
@@ -114,6 +111,21 @@ void main() {
       ],
     );
     expect(detail.specs, isNot(contains(('Material', 'Aluminium'))));
+  });
+
+  test('availability decides stock, not a count', () {
+    final soldOut = ProductSummary.fromMap({
+      'id': '1',
+      'availability': 'out_of_stock',
+      'variants': [
+        {'id': 'v1', 'availability': 'in_stock', 'stock_quantity': 0},
+      ],
+    });
+    final stocked = ProductSummary.fromMap({'id': '2', 'availability': 'in_stock'});
+
+    expect(soldOut.isOutOfStock, isTrue);
+    expect(soldOut.variants.single.inStock, isTrue);
+    expect(stocked.isOutOfStock, isFalse);
   });
 
   test('product detail falls back to basic fields when specifications are empty', () {
@@ -165,7 +177,7 @@ void main() {
       ProductVariant(
         id: 'v-s',
         price: '1890.00',
-        stockQuantity: 0,
+        available: false,
         isActive: true,
         size: 'S',
         color: 'Black',
@@ -173,7 +185,6 @@ void main() {
       ProductVariant(
         id: 'v-m',
         price: '1990.00',
-        stockQuantity: 4,
         isActive: true,
         size: 'M',
         color: 'Black',
@@ -181,7 +192,6 @@ void main() {
       ProductVariant(
         id: 'v-xl',
         price: '1990.00',
-        stockQuantity: 2,
         isActive: false,
         size: 'XL',
         color: 'Black',
@@ -257,7 +267,8 @@ void main() {
     await tester.tap(find.text('M'));
     await tester.pump();
     expect(find.text('Add to Cart'), findsOneWidget);
-    expect(find.text('Only 4 left'), findsOneWidget);
+    expect(find.textContaining('left'), findsNothing);
+    expect(find.text('In stock'), findsOneWidget);
     expect(find.text('৳1,990'), findsOneWidget);
 
     await tester.tap(find.byIcon(PhosphorIconsBold.plus));
@@ -313,7 +324,6 @@ void main() {
           sku: 'ORA-OEB-311',
           price: '1080.00',
           discountPercentage: 0,
-          stockQuantity: 4,
           isOutOfStock: false,
           isFeatured: false,
           categoryName: 'Electronics',
@@ -321,7 +331,6 @@ void main() {
             ProductVariant(
               id: 'v-neck',
               price: '1080.00',
-              stockQuantity: 4,
               isActive: true,
               options: [
                 VariantChoice(name: 'Storage', label: '128GB'),
@@ -380,7 +389,6 @@ ProductDetail _detail({
       price: '1890.00',
       comparePrice: '2360.00',
       discountPercentage: 20,
-      stockQuantity: soldOut ? 0 : 12,
       isOutOfStock: soldOut,
       isFeatured: false,
       isOfficial: official,
@@ -404,7 +412,6 @@ const _related = ProductSummary(
   shortDescription: '',
   price: '500',
   discountPercentage: 0,
-  stockQuantity: 5,
   isOutOfStock: false,
   isFeatured: false,
   categoryName: 'Watches',

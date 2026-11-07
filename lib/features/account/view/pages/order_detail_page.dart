@@ -34,6 +34,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   AppFailure? _failure;
   var _loading = true;
   var _refreshing = false;
+  var _openingInvoice = false;
   var _wait = 0;
   Timer? _countdown;
 
@@ -108,6 +109,22 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       return;
     }
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _downloadInvoice() async {
+    setState(() => _openingInvoice = true);
+    final result = await ref.read(ordersRepositoryProvider).invoiceLink(widget.orderId);
+    if (!mounted) return;
+    setState(() => _openingInvoice = false);
+    await result.fold(
+      (failure) async => showToast(context, failure.message, kind: ToastKind.error),
+      (url) async {
+        final uri = Uri.tryParse(url);
+        if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          if (mounted) showToast(context, 'Could not open the invoice.', kind: ToastKind.error);
+        }
+      },
+    );
   }
 
   void _back() {
@@ -212,6 +229,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 '${order.paymentStatus}${order.paymentMethod == null ? '' : ' · ${order.paymentMethod}'}',
                 style: AppTypography.bodySmall.copyWith(color: OrdersPalette.muted),
               ),
+              if (order.invoiceAvailable) ...[
+                const SizedBox(height: 12),
+                _InvoiceButton(busy: _openingInvoice, onTap: _openingInvoice ? null : _downloadInvoice),
+              ],
             ],
           ),
         ),
@@ -395,6 +416,48 @@ class _Line extends StatelessWidget {
         ),
         Text(Formatters.money(item.totalPrice), style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w800, color: OrdersPalette.price)),
       ],
+    );
+  }
+}
+
+class _InvoiceButton extends StatelessWidget {
+  const _InvoiceButton({required this.busy, this.onTap});
+
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      enabled: onTap != null,
+      semanticLabel: 'Download invoice',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: OrdersPalette.line),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (busy)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: OrdersPalette.orange),
+              )
+            else
+              const Icon(PhosphorIconsRegular.receipt, size: 18, color: OrdersPalette.ink),
+            const SizedBox(width: 8),
+            Text(
+              busy ? 'Preparing invoice' : 'Download invoice',
+              style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700, color: OrdersPalette.ink),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

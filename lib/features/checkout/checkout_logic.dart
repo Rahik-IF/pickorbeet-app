@@ -2,7 +2,8 @@ import 'package:pickorbeet/core/models/address_model.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/features/checkout/checkout_args.dart';
 
-/// Cities the order total treats as inside Dhaka. Matches `Order.save`.
+/// Cities treated as inside Dhaka when an address has no district. Matches
+/// `is_inside_dhaka` on the server.
 const dhakaDeliveryAreas = {
   'dhaka',
   'mirpur',
@@ -13,14 +14,31 @@ const dhakaDeliveryAreas = {
   'mohammadpur',
 };
 
+/// Only Dhaka district ships at the inside rate; the division never decides.
 bool shipsInsideDhaka({
   required String city,
   required String district,
   String division = '',
 }) {
-  return dhakaDeliveryAreas.contains(city.trim().toLowerCase()) ||
-      district.trim().toLowerCase() == 'dhaka' ||
-      division.trim().toLowerCase() == 'dhaka';
+  final zone = district.trim().toLowerCase();
+  if (zone.isNotEmpty) return zone == 'dhaka';
+  return dhakaDeliveryAreas.contains(city.trim().toLowerCase());
+}
+
+/// The address checkout starts with: the default one, else the first saved.
+AddressModel? startingAddress(List<AddressModel> addresses) {
+  for (final address in addresses) {
+    if (address.isDefault) return address;
+  }
+  return addresses.isEmpty ? null : addresses.first;
+}
+
+/// Zone the cart estimates delivery with, from the address checkout will start
+/// with. Null until the customer has saved one.
+bool? estimateInsideDhaka(List<AddressModel> addresses) {
+  final home = startingAddress(addresses);
+  if (home == null) return null;
+  return shipsInsideDhaka(city: home.city, district: home.district);
 }
 
 /// `01712345678` -> `+880 1712-345678`, the form on the checkout design.

@@ -33,7 +33,7 @@ class CartItemModel {
     this.shortDescription = '',
     this.comparePrice,
     this.discountPercentage = 0,
-    this.stockQuantity = 0,
+    this.maxQuantity = 0,
     this.isOutOfStock = false,
     this.size,
     this.color,
@@ -52,16 +52,18 @@ class CartItemModel {
   final String totalPrice;
   final String? comparePrice;
   final int discountPercentage;
-  final int stockQuantity;
+
+  /// Most a shopper may pick; 0 when the item can't be bought now. Never the stock count.
+  final int maxQuantity;
   final bool isOutOfStock;
   final String? size;
   final String? color;
   final List<CartOption> options;
 
-  bool get hasDiscount => discountPercentage > 0 && comparePrice != null;
+  /// Customers never see stock counts; this is the ceiling when the server sends none.
+  static const orderCeiling = 99;
 
-  /// Most a customer can add: the stock on hand, or one when stock is unknown.
-  int get maxQuantity => stockQuantity > 0 ? stockQuantity : quantity;
+  bool get hasDiscount => discountPercentage > 0 && comparePrice != null;
 
   /// `Midnight · 128GB`, or the older color and size pair.
   String get variantLabel {
@@ -71,25 +73,31 @@ class CartItemModel {
     return [color, size].whereType<String>().where((v) => v.trim().isNotEmpty).join(' · ');
   }
 
-  factory CartItemModel.fromMap(Json map) => CartItemModel(
-        id: map.str('id'),
-        productId: map.str('product'),
-        variantId: map.strOrNull('variant'),
-        productName: map.str('product_name'),
-        productSlug: map.str('product_slug'),
-        productImage: map.strOrNull('product_image'),
-        shortDescription: map.str('short_description'),
-        quantity: map.integer('quantity', 1),
-        unitPrice: map.money('unit_price'),
-        totalPrice: map.money('total_price'),
-        comparePrice: map.moneyOrNull('compare_price'),
-        discountPercentage: map.integer('discount_percentage'),
-        stockQuantity: map.integer('stock_quantity'),
-        isOutOfStock: map.boolean('is_out_of_stock'),
-        size: map.strOrNull('size'),
-        color: map.strOrNull('color'),
-        options: map.listOf('options', CartOption.fromMap),
-      );
+  factory CartItemModel.fromMap(Json map) {
+    final outOfStock = map.boolean('is_out_of_stock');
+    return CartItemModel(
+      id: map.str('id'),
+      productId: map.str('product'),
+      variantId: map.strOrNull('variant'),
+      productName: map.str('product_name'),
+      productSlug: map.str('product_slug'),
+      productImage: map.strOrNull('product_image'),
+      shortDescription: map.str('short_description'),
+      quantity: map.integer('quantity', 1),
+      unitPrice: map.money('unit_price'),
+      totalPrice: map.money('total_price'),
+      comparePrice: map.moneyOrNull('compare_price'),
+      discountPercentage: map.integer('discount_percentage'),
+      maxQuantity: map.integer(
+        'max_quantity',
+        map.integer('stock_quantity', outOfStock ? 0 : orderCeiling),
+      ),
+      isOutOfStock: outOfStock,
+      size: map.strOrNull('size'),
+      color: map.strOrNull('color'),
+      options: map.listOf('options', CartOption.fromMap),
+    );
+  }
 
   CartItemModel withQuantity(int value) {
     final total = Formatters.decimal(unitPrice) * Decimal.fromInt(value);
@@ -106,7 +114,7 @@ class CartItemModel {
       totalPrice: total.toString(),
       comparePrice: comparePrice,
       discountPercentage: discountPercentage,
-      stockQuantity: stockQuantity,
+      maxQuantity: maxQuantity,
       isOutOfStock: isOutOfStock,
       size: size,
       color: color,
@@ -121,11 +129,11 @@ class CartItemModel {
       other.quantity == quantity &&
       other.unitPrice == unitPrice &&
       other.totalPrice == totalPrice &&
-      other.stockQuantity == stockQuantity &&
+      other.maxQuantity == maxQuantity &&
       other.isOutOfStock == isOutOfStock;
 
   @override
-  int get hashCode => Object.hash(id, quantity, unitPrice, totalPrice, stockQuantity, isOutOfStock);
+  int get hashCode => Object.hash(id, quantity, unitPrice, totalPrice, maxQuantity, isOutOfStock);
 }
 
 /// The whole cart. Guest carts live in the Django session, signed-in carts on the user.
@@ -136,8 +144,8 @@ class CartModel {
     required this.items,
     required this.totalItems,
     required this.subtotal,
-    this.deliveryInsideDhaka = '60',
-    this.deliveryOutsideDhaka = '120',
+    this.deliveryInsideDhaka = '70',
+    this.deliveryOutsideDhaka = '125',
   });
 
   static const empty = CartModel(id: '', items: [], totalItems: 0, subtotal: '0');
@@ -158,8 +166,8 @@ class CartModel {
         items: map.listOf('items', CartItemModel.fromMap),
         totalItems: map.integer('total_items'),
         subtotal: map.money('subtotal'),
-        deliveryInsideDhaka: map.money('delivery_charge_inside_dhaka', '60'),
-        deliveryOutsideDhaka: map.money('delivery_charge_outside_dhaka', '120'),
+        deliveryInsideDhaka: map.money('delivery_charge_inside_dhaka', '70'),
+        deliveryOutsideDhaka: map.money('delivery_charge_outside_dhaka', '125'),
       );
 
   /// Rebuilds totals locally for optimistic updates; the server response replaces it.
@@ -212,6 +220,10 @@ class CouponQuote {
   final String name;
   final String discountAmount;
 }
+
+/// Changes whenever the lines or their totals change, so a voucher quote knows to refresh.
+String couponQuoteKey(Iterable<CartItemModel> lines) =>
+    [for (final line in lines) '${line.id}:${line.totalPrice}'].join(',');
 
 /// Enough of a cart line to add it again: used for undo and the guest-cart merge.
 @immutable

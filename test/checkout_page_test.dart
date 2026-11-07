@@ -31,7 +31,7 @@ const _powerBank = CartItemModel(
   shortDescription: '22.5W and PD 20W Output',
   comparePrice: '1850',
   discountPercentage: 21,
-  stockQuantity: 8,
+  maxQuantity: 99,
 );
 
 const _cart = CartModel(
@@ -135,6 +135,23 @@ void main() {
       shipsInsideDhaka(city: 'Chattogram', district: 'Chattogram'),
       isFalse,
     );
+    expect(
+      shipsInsideDhaka(city: 'Tongi', district: 'Gazipur', division: 'Dhaka'),
+      isFalse,
+    );
+    expect(shipsInsideDhaka(city: 'Dhaka', district: 'Noakhali'), isFalse);
+    expect(shipsInsideDhaka(city: 'Mirpur', district: ''), isTrue);
+    expect(startingAddress(const [_office, _home]), _home);
+    expect(startingAddress(const []), isNull);
+    expect(estimateInsideDhaka(const []), isNull);
+    expect(estimateInsideDhaka(const [_home]), isTrue);
+    expect(
+      estimateInsideDhaka([
+        _office,
+        _home.copyWith(division: 'Chattogram', district: 'Noakhali'),
+      ]),
+      isFalse,
+    );
 
     final body = checkoutPayload(
       name: _home.fullName,
@@ -231,11 +248,11 @@ void main() {
       find.text('544/2B, Nandonik Dream Tower, 6th floor'),
       findsOneWidget,
     );
-    expect(find.text('East Kazipara, Mirpur, Dhaka-1216'), findsOneWidget);
+    expect(find.text('East Kazipara, Mirpur, Dhaka, 1216'), findsOneWidget);
     expect(find.text('Sayed Muhit Al Rafi | +880 1712-345678'), findsWidgets);
     expect(find.text('Office'), findsOneWidget);
     expect(find.text('Orbeetal, House 12, Road 3, Block B'), findsOneWidget);
-    expect(find.text('Niketon, Gulshan, Dhaka-1212'), findsOneWidget);
+    expect(find.text('Niketon, Gulshan, Dhaka, 1212'), findsOneWidget);
     expect(find.text('Order Items (1)'), findsOneWidget);
     expect(find.text('Edit Cart'), findsOneWidget);
     expect(
@@ -268,8 +285,8 @@ void main() {
     expect(find.text('Complete'), findsOneWidget);
     expect(find.textContaining('1,450'), findsWidgets);
     expect(find.textContaining('1,850'), findsOneWidget);
-    expect(find.textContaining('1,510'), findsOneWidget);
-    expect(find.text('৳ 60'), findsOneWidget);
+    expect(find.textContaining('1,520'), findsOneWidget);
+    expect(find.text('৳ 70'), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) =>

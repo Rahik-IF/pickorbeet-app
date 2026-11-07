@@ -45,10 +45,10 @@ class CartRemoteRepository {
         success: const {200},
       );
 
-  /// Checks a voucher against [subtotal] without changing the cart.
-  Future<Either<AppFailure, CouponQuote>> validateCoupon({required String code, required String subtotal}) =>
+  /// Prices a voucher for the cart lines in [itemIds] without changing the cart.
+  Future<Either<AppFailure, CouponQuote>> validateCoupon({required String code, required List<String> itemIds}) =>
       guardRequest(
-        () => _api.post('/orders/coupons/validate/', body: {'code': code, 'subtotal': subtotal}),
+        () => _api.post('/orders/coupons/validate/', body: {'code': code, 'item_ids': itemIds}),
         (body) => CouponQuote.fromMap(asJson(body)),
       );
 

@@ -37,7 +37,6 @@ ProductSummary _item({
     price: price,
     comparePrice: compare,
     discountPercentage: discount,
-    stockQuantity: 8,
     isOutOfStock: false,
     isFeatured: featured,
     categoryName: 'Electronics',

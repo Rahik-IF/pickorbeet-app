@@ -378,7 +378,7 @@ Default permissions are `IsAuthenticatedOrReadOnly`, with JWT first and session 
 
 Access tokens last 1 day. Refresh tokens last 7 days and rotate on every refresh. The header type is `Bearer`.
 
-Timezone is `Asia/Dhaka`. Checkout sets the delivery charge from the shipping address: **৳60** when `shipping_city` is Dhaka, Mirpur, Uttara, Gulshan, Banani, Dhanmondi, or Mohammadpur, or when `shipping_district` is Dhaka; otherwise **৳120**. Those amounts are `DELIVERY_CHARGE_INSIDE_DHAKA` and `DELIVERY_CHARGE_OUTSIDE_DHAKA` in `core/settings.py`. The cart payload exposes the same two numbers. `GET /orders/delivery-options/` lists admin-defined options, but checkout does not read a selected option. `delivery_option` and `payment_method` sent on the checkout body are ignored.
+Timezone is `Asia/Dhaka`. Checkout sets the delivery charge from the shipping district: **৳70** when `shipping_district` is Dhaka, otherwise **৳125**. Gazipur, Narayanganj and the rest of Dhaka division pay the outside rate. Only an address without a district falls back to the city list (Dhaka, Mirpur, Uttara, Gulshan, Banani, Dhanmondi, Mohammadpur). A super admin edits both amounts under Settings → Delivery charges (`StoreSettings.delivery_charge_inside_dhaka` and `delivery_charge_outside_dhaka`); `DELIVERY_CHARGE_INSIDE_DHAKA` and `DELIVERY_CHARGE_OUTSIDE_DHAKA` in `core/settings.py` apply only before that row exists. `apps/orders/delivery.py` is the one place that reads them. The cart payload and `GET /products/settings/public/` expose the same two numbers. Placed orders keep the charge they were placed with. `GET /orders/delivery-options/` is legacy and checkout ignores it. `delivery_option` and `payment_method` sent on the checkout body are ignored.
 
 ---
 

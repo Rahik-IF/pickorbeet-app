@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pickorbeet/features/account/model/customer_order.dart';
+import 'package:pickorbeet/features/account/model/order_detail.dart';
 import 'package:pickorbeet/features/account/view/orders_palette.dart';
 import 'package:pickorbeet/features/account/view/widgets/order_card.dart';
 
@@ -71,6 +72,12 @@ void main() {
     expect(order.hasTracking, isTrue);
     expect(order.courierLine, 'In review · SF123456789BD');
     expect(order.stage, OrderStage.shipped);
+  });
+
+  test('order detail knows when the invoice can be downloaded', () {
+    final base = {'id': '3', 'order_number': 'PO783200', 'order_status': 'shipped', 'payment_status': 'pending'};
+    expect(OrderDetail.fromMap({...base, 'invoice_available': true}).invoiceAvailable, isTrue);
+    expect(OrderDetail.fromMap(base).invoiceAvailable, isFalse);
   });
 
   test('filter query maps account shortcuts onto the chips', () {

@@ -47,6 +47,12 @@ class OrdersRepository {
     (body) => OrderDetail.fromMap(asJson(body)),
   );
 
+  /// A signed link to the invoice PDF. It works for 10 minutes, so ask for it on tap.
+  Future<Either<AppFailure, String>> invoiceLink(String id) => guardRequest(
+    () => _api.post('/orders/my-orders/$id/invoice/link/'),
+    (body) => asJson(body).str('url'),
+  );
+
   /// Public lookup by order number or Steadfast tracking code.
   Future<Either<AppFailure, TrackingResult>> track({required String query, String phone = ''}) {
     final value = query.trim();

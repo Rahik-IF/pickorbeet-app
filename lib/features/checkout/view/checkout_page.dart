@@ -126,22 +126,24 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     return null;
   }
 
-  void _scheduleQuote(String subtotal) {
+  void _scheduleQuote(List<CartItemModel> lines) {
     final code = _coupon;
-    if (code == null || _pricedFor == subtotal) return;
+    final key = couponQuoteKey(lines);
+    if (code == null || _pricedFor == key) return;
+    final itemIds = [for (final line in lines) line.id];
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _coupon == code && _pricedFor != subtotal) {
-        unawaited(_reprice(code, subtotal));
+      if (mounted && _coupon == code && _pricedFor != key) {
+        unawaited(_reprice(code, itemIds, key));
       }
     });
   }
 
-  Future<void> _reprice(String code, String subtotal) async {
-    _pricedFor = subtotal;
+  Future<void> _reprice(String code, List<String> itemIds, String key) async {
+    _pricedFor = key;
     final result = await ref
         .read(cartRemoteRepositoryProvider)
-        .validateCoupon(code: code, subtotal: subtotal);
-    if (!mounted || _coupon != code || _pricedFor != subtotal) return;
+        .validateCoupon(code: code, itemIds: itemIds);
+    if (!mounted || _coupon != code || _pricedFor != key) return;
     result.fold((failure) {
       setState(() {
         _coupon = null;
@@ -426,7 +428,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         : cart.deliveryOutsideDhaka;
     final delivery = Formatters.decimal(deliveryAmount);
     final total = itemsTotal - discount + delivery;
-    _scheduleQuote(itemsTotal.toString());
+    _scheduleQuote(lines);
 
     final outOfStock = lines.any((item) => item.isOutOfStock);
     final bottom = MediaQuery.paddingOf(context).bottom;

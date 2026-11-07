@@ -93,6 +93,9 @@ class StoreVoucher {
     required this.detail,
     required this.when,
     required this.terms,
+    this.applies,
+    this.reason,
+    this.estimatedDiscount,
   });
 
   final String id;
@@ -111,6 +114,13 @@ class StoreVoucher {
   /// `Valid till 31 Oct 2026`, `Used on 12 Oct 2026`, or `Expired on 01 Oct 2026`.
   final String when;
   final String terms;
+
+  /// Whether it covers the cart lines the wallet was priced for; null when it wasn't asked.
+  final bool? applies;
+
+  /// Why it doesn't cover those lines, such as a minimum spend.
+  final String? reason;
+  final String? estimatedDiscount;
 
   bool get canUse => state == VoucherState.available;
 
@@ -185,6 +195,9 @@ class StoreVoucher {
       detail: detail,
       when: when,
       terms: terms,
+      applies: json['applies'] is bool ? json['applies'] as bool : null,
+      reason: json.strOrNull('reason'),
+      estimatedDiscount: json.moneyOrNull('estimated_discount'),
     );
   }
 }
@@ -202,3 +215,13 @@ List<StoreVoucher> vouchersFor(List<StoreVoucher> vouchers, VoucherFilter filter
 
 int voucherCount(List<StoreVoucher> vouchers, VoucherFilter filter) =>
     vouchersFor(vouchers, filter).length;
+
+/// Vouchers the cart can offer: ones that cover the lines first, then the biggest saving.
+List<StoreVoucher> cartVouchers(List<StoreVoucher> vouchers) {
+  final usable = [for (final voucher in vouchers) if (voucher.canUse) voucher];
+  usable.sort((a, b) {
+    if ((a.applies != false) != (b.applies != false)) return a.applies != false ? -1 : 1;
+    return Formatters.decimal(b.estimatedDiscount).compareTo(Formatters.decimal(a.estimatedDiscount));
+  });
+  return usable;
+}

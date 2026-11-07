@@ -686,7 +686,7 @@ class _CheckoutLine extends StatelessWidget {
               ],
               if (item.isOutOfStock)
                 Text(
-                  'Out of stock',
+                  'Unavailable',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppPallete.danger,
                     fontSize: 11,
@@ -713,7 +713,7 @@ class _CheckoutLine extends StatelessWidget {
         QuantityStepper(
           value: item.quantity,
           max: item.maxQuantity,
-          enabled: !item.isOutOfStock,
+          canIncrease: !item.isOutOfStock,
           valueWidth: 22,
           radius: 7,
           onChanged: onQuantity,

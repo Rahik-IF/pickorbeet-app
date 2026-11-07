@@ -2825,8 +2825,6 @@ bool _valueInStock(ProductDetail detail, _Group group, String label, Map<String,
   return false;
 }
 
-bool _hasOptions(ProductDetail detail) => _groups(detail).any((group) => group.required);
-
 ProductVariant? _selectedVariant(ProductDetail detail, Map<String, String> picked) {
   final active = [
     for (final variant in detail.summary.variants)
@@ -2870,39 +2868,19 @@ int _discountPercent(String price, String? compare) {
   return ((was - current) / was * 100).round();
 }
 
-int _stockCap(ProductDetail detail, Map<String, String> picked) {
+bool _soldOut(ProductDetail detail, Map<String, String> picked) {
   final variant = _selectedVariant(detail, picked);
-  final int stock;
-  if (variant != null) {
-    stock = variant.stockQuantity;
-  } else if (_hasOptions(detail)) {
-    stock = 99;
-  } else {
-    stock = detail.summary.stockQuantity;
-  }
-  if (stock <= 0) return 1;
-  if (stock > 99) return 99;
-  return stock;
+  return variant != null ? !variant.inStock : detail.summary.isOutOfStock;
 }
 
-(String, Color) _availability(ProductDetail detail, Map<String, String> picked) {
-  final variant = _selectedVariant(detail, picked);
-  if (variant != null) {
-    if (!variant.inStock) return ('Out of stock', AppPallete.danger);
-    if (variant.isLowStock) {
-      return ('Only ${variant.stockQuantity} left', AppPallete.warning);
-    }
-    return ('In stock', _DetailPalette.save);
-  }
-  final product = detail.summary;
-  if (product.isOutOfStock) return ('Out of stock', AppPallete.danger);
-  if (!_hasOptions(detail) &&
-      product.isLowStock &&
-      product.stockQuantity > 0) {
-    return ('Only ${product.stockQuantity} left', AppPallete.warning);
-  }
-  return ('In stock', _DetailPalette.save);
-}
+/// The server checks real stock when the item is added, so the picker only needs the ceiling.
+int _stockCap(ProductDetail detail, Map<String, String> picked) =>
+    _soldOut(detail, picked) ? 1 : CartItemModel.orderCeiling;
+
+(String, Color) _availability(ProductDetail detail, Map<String, String> picked) =>
+    _soldOut(detail, picked)
+        ? ('Out of stock', AppPallete.danger)
+        : ('In stock', _DetailPalette.save);
 
 ({String label, bool canAdd, String? prompt}) _purchaseAction(
   ProductDetail detail,
@@ -2914,9 +2892,7 @@ int _stockCap(ProductDetail detail, Map<String, String> picked) {
       return (label: 'Select a $name', canAdd: false, prompt: 'Choose a $name');
     }
   }
-  final variant = _selectedVariant(detail, picked);
-  final out = variant != null ? !variant.inStock : detail.summary.isOutOfStock;
-  if (out) return (label: 'Out of stock', canAdd: false, prompt: null);
+  if (_soldOut(detail, picked)) return (label: 'Out of stock', canAdd: false, prompt: null);
   return (label: 'Add to cart', canAdd: true, prompt: null);
 }
 
