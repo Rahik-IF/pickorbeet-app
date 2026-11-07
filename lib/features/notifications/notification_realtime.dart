@@ -564,7 +564,7 @@ class NotificationLifecycle extends Notifier<void> with WidgetsBindingObserver {
         final router = GoRouter.of(context);
         final location = router.state.uri.path;
         if (location == path) return;
-        router.push(path);
+        await router.push(path);
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 50));
