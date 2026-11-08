@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-
 import 'package:pickorbeet/core/motion/pressable.dart';
 import 'package:pickorbeet/core/theme/app_pallete.dart';
 import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/utils/formatters.dart';
 import 'package:pickorbeet/features/account/model/shipment.dart';
 import 'package:pickorbeet/features/account/view/orders_palette.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 StatusPalette courierPalette(String group) => switch (group) {
   'in_review' => CourierPalette.inReview,
@@ -241,9 +241,94 @@ class ShipmentCard extends StatelessWidget {
               const SizedBox(height: 8),
             ],
           ],
+          if (shipment.hasRider) ...[
+            const SizedBox(height: 6),
+            const Divider(height: 1, color: OrdersPalette.line),
+            const SizedBox(height: 12),
+            Text(
+              'ASSIGNED RIDER',
+              style: AppTypography.bodySmall.copyWith(
+                color: OrdersPalette.muted,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F8EE),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(PhosphorIconsRegular.truck, size: 18, color: Color(0xFF178A45)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if ((shipment.riderName ?? '').isNotEmpty)
+                        Text(
+                          shipment.riderName!,
+                          style: AppTypography.titleSmall.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: OrdersPalette.ink,
+                          ),
+                        ),
+                      if ((shipment.riderPhone ?? '').isNotEmpty)
+                        Text(
+                          shipment.riderPhone!,
+                          style: AppTypography.bodySmall.copyWith(color: OrdersPalette.inkSoft),
+                        ),
+                    ],
+                  ),
+                ),
+                if ((shipment.riderPhone ?? '').isNotEmpty)
+                  Pressable(
+                    onTap: () => callRider(shipment.riderPhone!),
+                    semanticLabel: 'Call rider',
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF178A45),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(PhosphorIconsRegular.phone, size: 15, color: Colors.white),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Call',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
+  }
+}
+
+Future<void> callRider(String phone) async {
+  final digits = phone.replaceAll(RegExp(r'\D'), '');
+  final uri = Uri(scheme: 'tel', path: digits);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
   }
 }
 

@@ -85,10 +85,45 @@ void main() {
 
     expect(find.text('Steadfast Courier'), findsOneWidget);
     expect(find.text('SF123456789BD'), findsOneWidget);
-    expect(find.text('Pending'), findsNWidgets(2));
+    expect(find.text('Pending'), findsOneWidget);
+    expect(find.text('Out for delivery'), findsOneWidget);
     expect(find.textContaining('Cash to pay the rider'), findsOneWidget);
     expect(find.text('Refresh'), findsOneWidget);
     expect(find.text('Open Steadfast'), findsOneWidget);
+    expect(find.text('ASSIGNED RIDER'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shipment card shows the assigned rider under the updates', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShipmentCard(
+            shipment: Shipment.fromMap({
+              'courier_name': 'Steadfast Courier',
+              'tracking_code': 'SFR1',
+              'status': 'pending',
+              'status_group': 'pending',
+              'status_label': 'Pending',
+              'rider_name': 'Nipa Akter',
+              'rider_phone': '01319760106',
+              'events': [
+                {'source': 'poll', 'status': 'pending', 'message': 'Assigned to rider.'},
+              ],
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Assigned to rider.'), findsOneWidget);
+    expect(find.text('ASSIGNED RIDER'), findsOneWidget);
+    expect(find.text('Nipa Akter'), findsOneWidget);
+    expect(find.text('01319760106'), findsOneWidget);
+    expect(find.text('Call'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

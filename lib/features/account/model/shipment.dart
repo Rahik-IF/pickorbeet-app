@@ -59,6 +59,8 @@ class Shipment {
     this.consignmentId,
     this.trackingCode,
     this.trackingUrl,
+    this.riderName,
+    this.riderPhone,
     this.codAmount,
     this.deliveryCharge,
     this.note,
@@ -72,6 +74,8 @@ class Shipment {
   final String? consignmentId;
   final String? trackingCode;
   final String? trackingUrl;
+  final String? riderName;
+  final String? riderPhone;
   final String status;
   final String statusGroup;
   final String statusLabel;
@@ -88,12 +92,16 @@ class Shipment {
 
   bool get hasCode => (trackingCode ?? '').isNotEmpty;
 
+  bool get hasRider => (riderName ?? '').isNotEmpty || (riderPhone ?? '').isNotEmpty;
+
   factory Shipment.fromMap(Json map) => Shipment(
     id: map.strOrNull('id'),
     courierName: map.str('courier_name', 'Steadfast Courier'),
     consignmentId: map.strOrNull('consignment_id'),
     trackingCode: map.strOrNull('tracking_code'),
     trackingUrl: map.strOrNull('tracking_url'),
+    riderName: map.strOrNull('rider_name'),
+    riderPhone: map.strOrNull('rider_phone'),
     status: map.str('status'),
     statusGroup: map.str('status_group', 'unknown'),
     statusLabel: map.str('status_label', 'Update'),
