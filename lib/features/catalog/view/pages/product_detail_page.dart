@@ -2270,7 +2270,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   final _picker = ImagePicker();
   var _rating = 5;
   var _saving = false;
-  String? _error;
+  String? _commentError;
+  String? _photoError;
   final _images = <({String filename, List<int> bytes, Uint8List preview})>[];
 
   @override
@@ -2300,21 +2301,28 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     }
     if (!mounted) return;
     setState(() {
+      _photoError = null;
       _images
         ..clear()
         ..addAll(next.take(5));
     });
   }
 
+  bool _isPhotoError(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('photo') || lower.contains('image');
+  }
+
   Future<void> _send() async {
     final comment = _comment.text.trim();
     if (comment.isEmpty) {
-      setState(() => _error = 'Write a short comment with your rating.');
+      setState(() => _commentError = 'Write a short comment with your rating.');
       return;
     }
     setState(() {
       _saving = true;
-      _error = null;
+      _commentError = null;
+      _photoError = null;
     });
     final result = await widget.onSubmit(
       _rating,
@@ -2325,7 +2333,11 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     result.fold(
       (failure) => setState(() {
         _saving = false;
-        _error = failure.message;
+        if (_isPhotoError(failure.message)) {
+          _photoError = failure.message;
+        } else {
+          _commentError = failure.message;
+        }
       }),
       (_) => Navigator.of(context).pop(true),
     );
@@ -2378,7 +2390,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
               textInputAction: TextInputAction.newline,
               decoration: InputDecoration(
                 hintText: 'How was this product?',
-                errorText: _error,
+                errorText: _commentError,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -2433,6 +2445,13 @@ class _ReviewSheetState extends State<_ReviewSheet> {
               'New uploads replace existing photos.',
               style: AppTypography.label.copyWith(fontSize: 11, color: _DetailPalette.muted),
             ),
+            if (_photoError != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _photoError!,
+                style: AppTypography.label.copyWith(fontSize: 12, color: const Color(0xFFD14343)),
+              ),
+            ],
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,

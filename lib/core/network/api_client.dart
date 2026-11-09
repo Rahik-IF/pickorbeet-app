@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'package:pickorbeet/core/constants/server_constant.dart';
 import 'package:pickorbeet/core/failure/failure.dart';
@@ -12,6 +13,56 @@ import 'package:pickorbeet/features/auth/device_identity.dart';
 import 'package:pickorbeet/features/auth/repositories/auth_local_repository.dart';
 
 enum _RefreshResult { refreshed, expired, unavailable }
+
+/// JPEG, PNG, GIF, or WebP from the file header. Null when the bytes are not one of those.
+MediaType? imageContentType(List<int> bytes) {
+  if (bytes.length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+    return MediaType('image', 'jpeg');
+  }
+  if (bytes.length >= 8 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4E &&
+      bytes[3] == 0x47 &&
+      bytes[4] == 0x0D &&
+      bytes[5] == 0x0A &&
+      bytes[6] == 0x1A &&
+      bytes[7] == 0x0A) {
+    return MediaType('image', 'png');
+  }
+  if (bytes.length >= 6 &&
+      bytes[0] == 0x47 &&
+      bytes[1] == 0x49 &&
+      bytes[2] == 0x46 &&
+      bytes[3] == 0x38 &&
+      (bytes[4] == 0x37 || bytes[4] == 0x39) &&
+      bytes[5] == 0x61) {
+    return MediaType('image', 'gif');
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] == 0x52 &&
+      bytes[1] == 0x49 &&
+      bytes[2] == 0x46 &&
+      bytes[3] == 0x46 &&
+      bytes[8] == 0x57 &&
+      bytes[9] == 0x45 &&
+      bytes[10] == 0x42 &&
+      bytes[11] == 0x50) {
+    return MediaType('image', 'webp');
+  }
+  return null;
+}
+
+String _uploadFilename(String filename, List<int> bytes) {
+  final type = imageContentType(bytes);
+  if (type == null) return filename;
+  final lower = filename.toLowerCase();
+  const known = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  if (known.any(lower.endsWith)) return filename;
+  final ext = type.subtype == 'jpeg' ? '.jpg' : '.${type.subtype}';
+  final base = filename.trim().isEmpty ? 'photo' : filename.trim();
+  return '$base$ext';
+}
 
 /// The one HTTP client for the Django API.
 ///
@@ -294,7 +345,8 @@ class ApiClient {
         http.MultipartFile.fromBytes(
           file.field,
           file.bytes,
-          filename: file.filename,
+          filename: _uploadFilename(file.filename, file.bytes),
+          contentType: imageContentType(file.bytes),
         ),
       );
     }

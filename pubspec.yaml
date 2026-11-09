@@ -2,7 +2,7 @@ name: pickorbeet
 description: "PickOrbeet shop for Android and iOS."
 publish_to: 'none'
 
-version: 1.0.7+8
+version: 1.0.8+9
 
 environment:
   sdk: ^3.9.2
@@ -16,6 +16,7 @@ dependencies:
   riverpod_annotation: ^2.6.1
   fpdart: ^1.2.0
   http: ^1.6.0
+  http_parser: ^4.1.2
   cookie_jar: ^4.0.9
   path_provider: ^2.1.5
   shared_preferences: ^2.5.5
