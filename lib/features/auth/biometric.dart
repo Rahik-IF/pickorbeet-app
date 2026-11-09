@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
@@ -78,47 +79,69 @@ class BiometricLock extends Notifier<BiometricPreference> {
 
   Future<BiometricSupport> support() async {
     try {
-      final supported = await _auth.isDeviceSupported();
-      if (!supported) return BiometricSupport.none;
-      final types = await _auth.getAvailableBiometrics();
+      final hardware = await _auth.canCheckBiometrics;
+      final types = await _enrolledTypes();
       final face = types.contains(BiometricType.face);
+      // Android reports strong or weak, never Face ID. A sensor with nothing
+      // enrolled still counts, so the switch can open the system prompt.
       final fingerprint = types.contains(BiometricType.fingerprint) ||
           types.contains(BiometricType.strong) ||
-          types.contains(BiometricType.weak);
-      if (face && !types.contains(BiometricType.fingerprint) && types.length == 1) {
-        return const BiometricSupport(fingerprint: false, face: true);
-      }
+          types.contains(BiometricType.weak) ||
+          (hardware && !face);
       return BiometricSupport(fingerprint: fingerprint, face: face);
     } on Object {
       return BiometricSupport.none;
     }
   }
 
-  Future<bool> prompt(String reason) async {
+  Future<List<BiometricType>> _enrolledTypes() async {
     try {
-      final supported = await _auth.isDeviceSupported();
-      final enrolled = await _auth.canCheckBiometrics;
-      if (!supported && !enrolled) return false;
-      return _auth.authenticate(
-        localizedReason: reason,
-        options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
-      );
+      return await _auth.getAvailableBiometrics();
     } on Object {
-      return false;
+      return const [];
     }
   }
 
-  Future<bool> enable(String method) async {
-    final ok = await prompt(
+  /// Null when the person confirmed. Otherwise a message safe to show.
+  Future<String?> confirm(String reason) async {
+    try {
+      final hardware = await _auth.canCheckBiometrics;
+      final supported = await _auth.isDeviceSupported();
+      if (!hardware && !supported) {
+        return 'This phone has no fingerprint or face unlock.';
+      }
+      final ok = await _auth.authenticate(
+        localizedReason: reason,
+        options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+      );
+      return ok ? null : 'Biometric verification was cancelled.';
+    } on PlatformException catch (error) {
+      return switch (error.code) {
+        'NotEnrolled' => 'Add a fingerprint or face in your device settings, then turn this on.',
+        'NotAvailable' => 'This phone has no fingerprint or face unlock set up.',
+        'LockedOut' || 'PermanentlyLockedOut' => 'Biometrics are locked. Unlock the phone with your PIN, then try again.',
+        'no_fragment_activity' => 'Reinstall the latest build, then try fingerprint again.',
+        _ => 'Biometric verification could not start.',
+      };
+    } on Object {
+      return 'Biometric verification could not start.';
+    }
+  }
+
+  Future<bool> prompt(String reason) async => (await confirm(reason)) == null;
+
+  /// Null when biometric unlock is now on.
+  Future<String?> enable(String method) async {
+    final failure = await confirm(
       method == 'face'
           ? 'Confirm Face ID to unlock PickOrbeet'
           : 'Confirm your fingerprint to unlock PickOrbeet',
     );
-    if (!ok) return false;
+    if (failure != null) return failure;
     final next = BiometricPreference(enabled: true, method: method);
     await _store.write(next);
     state = next;
-    return true;
+    return null;
   }
 
   Future<void> selectMethod(String method) async {

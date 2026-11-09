@@ -716,9 +716,9 @@ class SecuritySubpage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: tone.page,
-      child: Column(
+    return Scaffold(
+      backgroundColor: tone.page,
+      body: Column(
         children: [
           const DetailHeader(),
           Expanded(

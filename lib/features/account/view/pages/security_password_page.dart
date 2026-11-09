@@ -152,9 +152,9 @@ class _SecurityPasswordPageState extends ConsumerState<SecurityPasswordPage> {
     final preferred = current.usesFace && _support.face
         ? 'face'
         : (_support.fingerprint ? 'fingerprint' : 'face');
-    final ok = await lock.enable(preferred);
-    if (!ok && mounted) {
-      showToast(context, 'Biometric verification was cancelled.', kind: ToastKind.error);
+    final failure = await lock.enable(preferred);
+    if (failure != null && mounted) {
+      showToast(context, failure, kind: ToastKind.error);
     }
   }
 
@@ -170,8 +170,8 @@ class _SecurityPasswordPageState extends ConsumerState<SecurityPasswordPage> {
       return;
     }
     if (!enabled) {
-      final ok = await ref.read(biometricLockProvider.notifier).enable(method);
-      if (!ok && mounted) showToast(context, 'Biometric verification was cancelled.', kind: ToastKind.error);
+      final failure = await ref.read(biometricLockProvider.notifier).enable(method);
+      if (failure != null && mounted) showToast(context, failure, kind: ToastKind.error);
       return;
     }
     await ref.read(biometricLockProvider.notifier).selectMethod(method);
@@ -216,9 +216,9 @@ class _SecurityPasswordPageState extends ConsumerState<SecurityPasswordPage> {
     final high = user?.twoFactorEnabled ?? false;
     final email = user?.email ?? '';
 
-    return ColoredBox(
-      color: tone.page,
-      child: Column(
+    return Scaffold(
+      backgroundColor: tone.page,
+      body: Column(
         children: [
           const SecurityHeader(),
           Expanded(
