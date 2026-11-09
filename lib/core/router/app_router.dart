@@ -6,17 +6,24 @@ import 'package:pickorbeet/core/providers/session_notifier.dart';
 import 'package:pickorbeet/core/router/app_shell.dart';
 import 'package:pickorbeet/core/router/routes.dart';
 import 'package:pickorbeet/core/widgets/placeholder_page.dart';
+import 'package:pickorbeet/features/account/security/security_chrome.dart';
 import 'package:pickorbeet/features/account/view/pages/account_page.dart';
 import 'package:pickorbeet/features/account/view/pages/addresses_page.dart';
+import 'package:pickorbeet/features/account/view/pages/change_password_page.dart';
 import 'package:pickorbeet/features/account/view/pages/edit_profile_page.dart';
+import 'package:pickorbeet/features/account/view/pages/login_activity_page.dart';
+import 'package:pickorbeet/features/account/view/pages/manage_devices_page.dart';
 import 'package:pickorbeet/features/account/view/pages/order_detail_page.dart';
 import 'package:pickorbeet/features/account/view/pages/orders_page.dart';
+import 'package:pickorbeet/features/account/view/pages/recovery_email_page.dart';
+import 'package:pickorbeet/features/account/view/pages/security_password_page.dart';
 import 'package:pickorbeet/features/account/view/pages/settings_page.dart';
 import 'package:pickorbeet/features/account/view/pages/track_order_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/forgot_password_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/login_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/register_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/reset_password_page.dart';
+import 'package:pickorbeet/features/auth/view/pages/two_factor_login_page.dart';
 import 'package:pickorbeet/features/auth/view/pages/verify_email_page.dart';
 import 'package:pickorbeet/features/cart/view/pages/cart_page.dart';
 import 'package:pickorbeet/features/catalog/models/catalog_models.dart';
@@ -181,6 +188,12 @@ GoRouter appRouter(Ref ref) {
             ResetPasswordPage(token: state.uri.queryParameters['token'] ?? ''),
       ),
       GoRoute(
+        path: Routes.twoFactor,
+        builder: (_, state) => TwoFactorLoginPage(
+          args: state.extra is TwoFactorLoginArgs ? state.extra as TwoFactorLoginArgs : null,
+        ),
+      ),
+      GoRoute(
         path: Routes.profile,
         builder: (_, _) => const EditProfilePage(),
       ),
@@ -201,7 +214,13 @@ GoRouter appRouter(Ref ref) {
       ),
       GoRoute(
         path: Routes.changePassword,
-        builder: (_, _) => const PlaceholderPage('Change password'),
+        builder: (_, _) => const SecurityPasswordPage(),
+        routes: [
+          GoRoute(path: 'change', builder: (_, _) => const ChangePasswordPage()),
+          GoRoute(path: 'activity', builder: (_, _) => const LoginActivityPage()),
+          GoRoute(path: 'devices', builder: (_, _) => const ManageDevicesPage()),
+          GoRoute(path: 'recovery', builder: (_, _) => const RecoveryEmailPage()),
+        ],
       ),
       GoRoute(
         path: Routes.privacy,

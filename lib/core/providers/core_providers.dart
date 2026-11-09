@@ -2,6 +2,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:pickorbeet/core/network/api_client.dart';
+import 'package:pickorbeet/features/auth/device_identity.dart';
 import 'package:pickorbeet/features/auth/repositories/auth_local_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,4 +35,5 @@ ApiClient apiClient(Ref ref) => ApiClient(
       client: ref.watch(httpClientProvider),
       tokens: ref.watch(authLocalRepositoryProvider),
       cookies: ref.watch(cookieJarProvider),
+      device: ref.watch(deviceIdentityProvider),
     );

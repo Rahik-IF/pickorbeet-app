@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pickorbeet/app.dart';
 import 'package:pickorbeet/core/providers/core_providers.dart';
 import 'package:pickorbeet/core/theme/theme.dart';
+import 'package:pickorbeet/features/auth/biometric.dart';
+import 'package:pickorbeet/features/auth/device_identity.dart';
 import 'package:pickorbeet/features/auth/repositories/auth_local_repository.dart';
 import 'package:pickorbeet/features/notifications/notification_realtime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +22,8 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   final supportDir = await getApplicationSupportDirectory();
   final cookies = PersistCookieJar(storage: FileStorage('${supportDir.path}/cookies/'));
+  final identity = await DeviceIdentity.load(prefs);
+  final biometric = await const BiometricStore().read();
 
   // The iOS keychain outlives an uninstall; a fresh install must not inherit a stale session.
   const installedKey = 'installed';
@@ -33,6 +37,8 @@ Future<void> main() async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         cookieJarProvider.overrideWithValue(cookies),
         authLocalRepositoryProvider.overrideWithValue(tokens),
+        deviceIdentityProvider.overrideWithValue(identity),
+        biometricLockProvider.overrideWith(() => BiometricLock(biometric)),
       ],
       child: const PickOrbeetApp(),
     ),

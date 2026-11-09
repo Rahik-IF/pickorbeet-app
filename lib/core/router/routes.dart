@@ -61,6 +61,7 @@ abstract final class Routes {
   static const verifyEmail = '/verify-email';
   static const forgotPassword = '/forgot-password';
   static const resetPassword = '/reset-password';
+  static const twoFactor = '/login/2fa';
   static String loginFrom(String location) => Uri(path: login, queryParameters: {'from': location}).toString();
   static String verifyEmailFor(String email) => Uri(path: verifyEmail, queryParameters: {'email': email}).toString();
 
@@ -70,6 +71,10 @@ abstract final class Routes {
   static const newAddress = '/account/addresses/new';
   static String editAddress(String id) => '/account/addresses/$id';
   static const changePassword = '/account/password';
+  static const setPassword = '/account/password/change';
+  static const loginActivity = '/account/password/activity';
+  static const manageDevices = '/account/password/devices';
+  static const accountRecovery = '/account/password/recovery';
   static const privacy = '/account/privacy';
   static const help = '/help';
   static String helpFor(String orderNumber) => '/help?order=${Uri.encodeQueryComponent(orderNumber)}';

@@ -20,10 +20,10 @@ class AuthRemoteRepository {
 
   final ApiClient _api;
 
-  Future<Either<AppFailure, AuthSession>> login({required String email, required String password}) {
+  Future<Either<AppFailure, CredentialResult>> login({required String email, required String password}) {
     return guardRequest(
       () => _api.post('/auth/login/', body: {'email': email.trim(), 'password': password}, authenticated: false),
-      (body) => AuthSession.fromMap(asJson(body)),
+      (body) => CredentialResult.fromMap(asJson(body)),
       success: const {200},
     );
   }
@@ -60,10 +60,10 @@ class AuthRemoteRepository {
     );
   }
 
-  Future<Either<AppFailure, AuthSession>> google(String credential) {
+  Future<Either<AppFailure, CredentialResult>> google(String credential) {
     return guardRequest(
       () => _api.post('/auth/google/', body: {'credential': credential}, authenticated: false),
-      (body) => AuthSession.fromMap(asJson(body)),
+      (body) => CredentialResult.fromMap(asJson(body)),
       success: const {200},
     );
   }
@@ -158,13 +158,13 @@ class AuthRemoteRepository {
   }
 
   Future<Either<AppFailure, String>> changePassword({
-    required String oldPassword,
+    String? oldPassword,
     required String newPassword,
     required String newPasswordConfirm,
   }) {
     return guardRequest(
       () => _api.post('/auth/change-password/', body: {
-        'old_password': oldPassword,
+        if (oldPassword != null && oldPassword.isNotEmpty) 'old_password': oldPassword,
         'new_password': newPassword,
         'new_password_confirm': newPasswordConfirm,
       }),

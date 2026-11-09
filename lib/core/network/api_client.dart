@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:pickorbeet/core/constants/server_constant.dart';
 import 'package:pickorbeet/core/failure/failure.dart';
+import 'package:pickorbeet/features/auth/device_identity.dart';
 import 'package:pickorbeet/features/auth/repositories/auth_local_repository.dart';
 
 enum _RefreshResult { refreshed, expired, unavailable }
@@ -18,12 +19,15 @@ enum _RefreshResult { refreshed, expired, unavailable }
 /// expired access token once for every request waiting on it, and retries a GET once on a dropped
 /// connection.
 class ApiClient {
+  final DeviceIdentity? device;
+
   ApiClient({
     required http.Client client,
     required AuthLocalRepository tokens,
     required CookieJar cookies,
     String? baseUrl,
     this.timeout = const Duration(seconds: 15),
+    this.device,
   }) : _client = client,
        _tokens = tokens,
        _cookies = cookies,
@@ -284,6 +288,7 @@ class ApiClient {
       ..fields.addAll(fields)
       ..headers[HttpHeaders.acceptHeader] = 'application/json'
       ..headers['X-Client-Platform'] = 'app';
+    _applyDevice(request.headers);
     for (final file in files) {
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -308,6 +313,13 @@ class ApiClient {
     return response;
   }
 
+  void _applyDevice(Map<String, String> headers) {
+    final current = device;
+    if (current == null || current.id.isEmpty) return;
+    headers['X-Device-Id'] = current.id;
+    if (current.name.isNotEmpty) headers['X-Device-Name'] = current.name;
+  }
+
   Future<http.Response> _dispatch(
     String method,
     Uri target,
@@ -319,6 +331,8 @@ class ApiClient {
       ..headers.addAll({
         HttpHeaders.acceptHeader: 'application/json',
         'X-Client-Platform': 'app',
+        if (device != null && device!.id.isNotEmpty) 'X-Device-Id': device!.id,
+        if (device != null && device!.name.isNotEmpty) 'X-Device-Name': device!.name,
         if (body != null)
           HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
         if (access != null) HttpHeaders.authorizationHeader: 'Bearer $access',

@@ -46,6 +46,8 @@
 		<string>PickOrbeet uses the microphone so you can search by speaking.</string>
 		<key>NSCameraUsageDescription</key>
 		<string>PickOrbeet uses the camera so you can take a profile photo.</string>
+		<key>NSFaceIDUsageDescription</key>
+		<string>PickOrbeet uses Face ID to unlock the app when biometric verification is on.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>PickOrbeet uses your photos for your profile picture and support chat.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:pickorbeet/core/providers/session_notifier.dart';
 import 'package:pickorbeet/core/router/routes.dart';
 import 'package:pickorbeet/core/theme/app_pallete.dart';
 import 'package:pickorbeet/core/theme/app_typography.dart';
 import 'package:pickorbeet/core/widgets/toast.dart';
+import 'package:pickorbeet/features/account/security/security_chrome.dart';
 import 'package:pickorbeet/features/auth/google_auth_config.dart';
 import 'package:pickorbeet/features/auth/repositories/auth_remote_repository.dart';
 
@@ -39,11 +38,7 @@ class _GoogleSignInButtonState extends ConsumerState<GoogleSignInButton> {
       if (!mounted) return;
       await result.fold(
         (failure) async => showToast(context, failure.message, kind: ToastKind.error),
-        (session) async {
-          await completeSignIn(ref, session);
-          if (!mounted) return;
-          context.go(widget.next);
-        },
+        (result) => finishCredentialSignIn(ref, context, result, next: widget.next),
       );
     } on Object catch (error) {
       if (mounted) showToast(context, 'Google sign-in failed. $error', kind: ToastKind.error);

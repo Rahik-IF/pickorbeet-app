@@ -5,6 +5,7 @@ import 'package:pickorbeet/core/providers/preferences_notifier.dart';
 import 'package:pickorbeet/core/providers/session_notifier.dart';
 import 'package:pickorbeet/core/router/app_router.dart';
 import 'package:pickorbeet/core/theme/theme.dart';
+import 'package:pickorbeet/features/auth/biometric_gate.dart';
 import 'package:pickorbeet/features/notifications/notification_realtime.dart';
 
 class PickOrbeetApp extends ConsumerWidget {
@@ -25,10 +26,12 @@ class PickOrbeetApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
       routerConfig: router,
-      builder: (context, child) => MediaQuery.withClampedTextScaling(
-        minScaleFactor: 0.9,
-        maxScaleFactor: 1.3,
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => BiometricGate(
+        child: MediaQuery.withClampedTextScaling(
+          minScaleFactor: 0.9,
+          maxScaleFactor: 1.3,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }

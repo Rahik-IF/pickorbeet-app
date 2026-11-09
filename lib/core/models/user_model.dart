@@ -22,6 +22,11 @@ class UserModel {
     this.orderCount = 0,
     this.totalSpent = '0',
     this.dateJoined,
+    this.twoFactorEnabled = false,
+    this.recoveryEmail,
+    this.recoveryEmailVerified = false,
+    this.hasPassword = true,
+    this.includesSecurity = false,
   });
 
   final String id;
@@ -46,6 +51,17 @@ class UserModel {
   final int orderCount;
   final String totalSpent;
   final DateTime? dateJoined;
+
+  /// Email codes are required at sign-in. Comes from the profile, not the login payload.
+  final bool twoFactorEnabled;
+  final String? recoveryEmail;
+  final bool recoveryEmailVerified;
+
+  /// False for a Google account that has never set a password.
+  final bool hasPassword;
+
+  /// True when [fromMap] saw the security fields, so a thinner login payload does not wipe them.
+  final bool includesSecurity;
 
   String get displayName {
     if (fullName.trim().isNotEmpty) return fullName.trim();
@@ -81,6 +97,11 @@ class UserModel {
       orderCount: map.integer('order_count'),
       totalSpent: map.money('total_spent'),
       dateJoined: map.date('date_joined'),
+      twoFactorEnabled: map.containsKey('two_factor_enabled') && map.boolean('two_factor_enabled'),
+      recoveryEmail: map.containsKey('recovery_email') ? map.strOrNull('recovery_email') : null,
+      recoveryEmailVerified: map.containsKey('recovery_email_verified') && map.boolean('recovery_email_verified'),
+      hasPassword: map.containsKey('has_password') ? map.boolean('has_password') : true,
+      includesSecurity: map.containsKey('two_factor_enabled'),
     );
   }
 
@@ -95,6 +116,11 @@ class UserModel {
       city: city ?? previous.city,
       postalCode: postalCode ?? previous.postalCode,
       avatar: previous.avatar,
+      twoFactorEnabled: includesSecurity ? twoFactorEnabled : previous.twoFactorEnabled,
+      recoveryEmail: includesSecurity ? recoveryEmail : previous.recoveryEmail,
+      recoveryEmailVerified: includesSecurity ? recoveryEmailVerified : previous.recoveryEmailVerified,
+      hasPassword: includesSecurity ? hasPassword : previous.hasPassword,
+      includesSecurity: includesSecurity || previous.includesSecurity,
     );
   }
 
@@ -111,6 +137,11 @@ class UserModel {
     Object? avatar = _keep,
     int? orderCount,
     String? totalSpent,
+    bool? twoFactorEnabled,
+    Object? recoveryEmail = _keep,
+    bool? recoveryEmailVerified,
+    bool? hasPassword,
+    bool? includesSecurity,
   }) {
     return UserModel(
       id: id,
@@ -129,6 +160,11 @@ class UserModel {
       orderCount: orderCount ?? this.orderCount,
       totalSpent: totalSpent ?? this.totalSpent,
       dateJoined: dateJoined,
+      twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
+      recoveryEmail: identical(recoveryEmail, _keep) ? this.recoveryEmail : recoveryEmail as String?,
+      recoveryEmailVerified: recoveryEmailVerified ?? this.recoveryEmailVerified,
+      hasPassword: hasPassword ?? this.hasPassword,
+      includesSecurity: includesSecurity ?? this.includesSecurity,
     );
   }
 
@@ -145,10 +181,30 @@ class UserModel {
       other.postalCode == postalCode &&
       other.avatar == avatar &&
       other.orderCount == orderCount &&
-      other.totalSpent == totalSpent;
+      other.totalSpent == totalSpent &&
+      other.twoFactorEnabled == twoFactorEnabled &&
+      other.recoveryEmail == recoveryEmail &&
+      other.recoveryEmailVerified == recoveryEmailVerified &&
+      other.hasPassword == hasPassword;
 
   @override
-  int get hashCode => Object.hash(id, email, fullName, phone, isVerified, address, city, postalCode, avatar, orderCount, totalSpent);
+  int get hashCode => Object.hash(
+        id,
+        email,
+        fullName,
+        phone,
+        isVerified,
+        address,
+        city,
+        postalCode,
+        avatar,
+        orderCount,
+        totalSpent,
+        twoFactorEnabled,
+        recoveryEmail,
+        recoveryEmailVerified,
+        hasPassword,
+      );
 }
 
 const _keep = Object();
