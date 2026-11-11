@@ -174,6 +174,20 @@ void main() {
     expect(body['coupon_code'], 'SAVE10');
     expect(body.containsKey('guest_name'), isFalse);
     expect(Formatters.money('1510'), '৳ 1,510');
+
+    final guest = checkoutPayload(
+      name: _home.fullName,
+      phone: _home.phone,
+      line1: _home.addressLine1,
+      division: _home.division,
+      city: _home.city,
+      district: _home.district,
+      payment: CheckoutPayment.cod,
+      asGuest: true,
+      email: ' guest@example.com ',
+    );
+    expect(guest['guest_email'], 'guest@example.com');
+    expect(guest['guest_name'], _home.fullName);
   });
 
   test('checkout keeps the cart selection on the url', () {

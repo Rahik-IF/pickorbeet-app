@@ -41,6 +41,7 @@ class CheckoutPage extends ConsumerStatefulWidget {
 class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   final _name = TextEditingController();
   final _phone = TextEditingController();
+  final _email = TextEditingController();
   final _line1 = TextEditingController();
   final _line2 = TextEditingController();
   var _division = '';
@@ -64,14 +65,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     super.initState();
     final code = widget.args.couponCode?.trim();
     _coupon = code == null || code.isEmpty ? null : code;
-    for (final controller in [_name, _phone, _line1, _line2]) {
+    for (final controller in [_name, _phone, _email, _line1, _line2]) {
       controller.addListener(_onGuestEdit);
     }
   }
 
   @override
   void dispose() {
-    for (final controller in [_name, _phone, _line1, _line2]) {
+    for (final controller in [_name, _phone, _email, _line1, _line2]) {
       controller.removeListener(_onGuestEdit);
       controller.dispose();
     }
@@ -203,6 +204,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (!RegExp(r'^01\d{9}$').hasMatch(Formatters.phoneForApi(_phone.text))) {
       errors['phone'] = 'Enter a valid mobile number';
     }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(_email.text.trim())) {
+      errors['email'] = 'Enter an email so we can send your tracking link';
+    }
     if (_line1.text.trim().isEmpty) {
       errors['line1'] = 'Enter the delivery address';
     }
@@ -318,6 +322,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         itemIds: [for (final line in lines) line.id],
         payment: _payment,
         asGuest: true,
+        email: _email.text,
       );
     }
 
@@ -533,6 +538,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       return _GuestDeliveryForm(
         name: _name,
         phone: _phone,
+        email: _email,
         line1: _line1,
         line2: _line2,
         division: _division,
@@ -603,6 +609,7 @@ class _GuestDeliveryForm extends StatelessWidget {
   const _GuestDeliveryForm({
     required this.name,
     required this.phone,
+    required this.email,
     required this.line1,
     required this.line2,
     required this.division,
@@ -616,6 +623,7 @@ class _GuestDeliveryForm extends StatelessWidget {
 
   final TextEditingController name;
   final TextEditingController phone;
+  final TextEditingController email;
   final TextEditingController line1;
   final TextEditingController line2;
   final String division;
@@ -655,6 +663,15 @@ class _GuestDeliveryForm extends StatelessWidget {
           keyboard: TextInputType.phone,
           action: TextInputAction.next,
           autofill: AutofillHints.telephoneNumber,
+        ),
+        const SizedBox(height: 8),
+        _GuestField(
+          label: 'Email',
+          controller: email,
+          error: errors['email'],
+          keyboard: TextInputType.emailAddress,
+          action: TextInputAction.next,
+          autofill: AutofillHints.email,
         ),
         const SizedBox(height: 8),
         _GuestField(

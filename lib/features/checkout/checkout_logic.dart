@@ -114,7 +114,6 @@ Map<String, Object?> checkoutPayload({
     'platform': 'app',
     if (asGuest) 'guest_name': name.trim(),
     if (asGuest) 'guest_phone': apiPhone,
-    if (asGuest && email != null && email.trim().isNotEmpty)
-      'guest_email': email.trim(),
+    if (asGuest) 'guest_email': (email ?? '').trim(),
   };
 }
