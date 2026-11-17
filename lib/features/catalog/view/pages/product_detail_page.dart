@@ -669,6 +669,12 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     );
   }
 
+  String _productCode(ProductDetail detail) {
+    final variantCode = _selectedVariant(detail, _picked)?.sku.trim() ?? '';
+    if (variantCode.isNotEmpty) return variantCode;
+    return detail.summary.sku.trim();
+  }
+
   Widget _summary(ProductDetail detail, {required bool signedIn}) {
     final product = detail.summary;
     final price = _unitPrice(detail, _picked);
@@ -718,10 +724,10 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
             ),
           ],
         ),
-        if (product.sku.trim().isNotEmpty) ...[
+        if (_productCode(detail).isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
-            'Product Code: ${product.sku.trim()}',
+            'Product Code: ${_productCode(detail)}',
             style: AppTypography.bodyMedium.copyWith(fontSize: 13, color: _DetailPalette.muted, fontWeight: FontWeight.w500),
           ),
         ],

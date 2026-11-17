@@ -156,6 +156,7 @@ class ProductVariant {
     required this.id,
     required this.price,
     required this.isActive,
+    this.sku = '',
     this.available = true,
     this.size,
     this.color,
@@ -164,6 +165,7 @@ class ProductVariant {
 
   factory ProductVariant.fromMap(Json map) => ProductVariant(
     id: map.str('id'),
+    sku: map.str('sku'),
     size: map.strOrNull('size'),
     color: map.strOrNull('color'),
     price: map.money('effective_price', map.money('price')),
@@ -173,6 +175,7 @@ class ProductVariant {
   );
 
   final String id;
+  final String sku;
   final String? size;
   final String? color;
   final String price;
